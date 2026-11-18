@@ -1,0 +1,2227 @@
+{
+ "commit": "74cfa62dad226aa4f2d41f869dfd95f7ade34ec4",
+ "tabelaInfo": {
+  "norma": "Portaria SUROC nº 22/2026 (ANTT)",
+  "vigencia": "2026-09-30",
+  "dieselReferencia": 7.33,
+  "url": "https://www.legisweb.com.br/legislacao/?id=502245"
+ },
+ "eixos": [
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  9
+ ],
+ "tabelaA": {
+  "carga-geral": {
+   "nome": "Carga geral",
+   "ccd": [
+    4.0738,
+    5.2177,
+    5.918,
+    6.8284,
+    7.5347,
+    8.2727,
+    9.4114
+   ],
+   "cc": [
+    451.84,
+    541.86,
+    588.86,
+    657.56,
+    671.93,
+    831.66,
+    903.32
+   ]
+  },
+  "granel-solido": {
+   "nome": "Granel sólido",
+   "ccd": [
+    4.1056,
+    5.2555,
+    5.9476,
+    6.8548,
+    7.5641,
+    8.2316,
+    9.4318
+   ],
+   "cc": [
+    460.59,
+    552.24,
+    597,
+    664.83,
+    680.01,
+    820.34,
+    908.91
+   ]
+  },
+  "granel-liquido": {
+   "nome": "Granel líquido",
+   "ccd": [
+    4.1796,
+    5.3511,
+    6.1019,
+    7.0226,
+    7.7372,
+    8.37,
+    9.5909
+   ],
+   "cc": [
+    471.98,
+    569.57,
+    621.52,
+    693.08,
+    709.72,
+    840.5,
+    934.76
+   ]
+  },
+  "frigorificada": {
+   "nome": "Frigorificada ou aquecida",
+   "ccd": [
+    4.8234,
+    6.1659,
+    7.0345,
+    8.0623,
+    8.8911,
+    9.8134,
+    11.1479
+   ],
+   "cc": [
+    520.07,
+    623.27,
+    686.63,
+    757.98,
+    772.35,
+    982.76,
+    1067.06
+   ]
+  },
+  "conteinerizada": {
+   "nome": "Conteinerizada",
+   "ccd": [
+    null,
+    5.2282,
+    5.8755,
+    6.791,
+    7.4986,
+    8.2292,
+    9.3486
+   ],
+   "cc": [
+    null,
+    544.75,
+    577.15,
+    647.29,
+    662.01,
+    819.69,
+    886.05
+   ]
+  }
+ },
+ "pisos": [
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 1,
+   "pisoCentavos": 45591
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 7,
+   "pisoCentavos": 48036
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 10,
+   "pisoCentavos": 49258
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 99,
+   "pisoCentavos": 85515
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 100,
+   "pisoCentavos": 85922
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 333,
+   "pisoCentavos": 180842
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 500,
+   "pisoCentavos": 248874
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 777,
+   "pisoCentavos": 361718
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 1234,
+   "pisoCentavos": 547891
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 2,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1266917
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 1,
+   "pisoCentavos": 54708
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 7,
+   "pisoCentavos": 57838
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 10,
+   "pisoCentavos": 59404
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 99,
+   "pisoCentavos": 105841
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 100,
+   "pisoCentavos": 106363
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 333,
+   "pisoCentavos": 227935
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 500,
+   "pisoCentavos": 315071
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 777,
+   "pisoCentavos": 459601
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 1234,
+   "pisoCentavos": 698050
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 3,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1618974
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 1,
+   "pisoCentavos": 59478
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 7,
+   "pisoCentavos": 63029
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 10,
+   "pisoCentavos": 64804
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 99,
+   "pisoCentavos": 117474
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 100,
+   "pisoCentavos": 118066
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 333,
+   "pisoCentavos": 255955
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 500,
+   "pisoCentavos": 354786
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 777,
+   "pisoCentavos": 518715
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 1234,
+   "pisoCentavos": 789167
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 4,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1833694
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 1,
+   "pisoCentavos": 66439
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 7,
+   "pisoCentavos": 70536
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 10,
+   "pisoCentavos": 72584
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 99,
+   "pisoCentavos": 133357
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 100,
+   "pisoCentavos": 134040
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 333,
+   "pisoCentavos": 293142
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 500,
+   "pisoCentavos": 407176
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 777,
+   "pisoCentavos": 596323
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 1234,
+   "pisoCentavos": 908381
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 5,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2113593
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 1,
+   "pisoCentavos": 67946
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 7,
+   "pisoCentavos": 72467
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 10,
+   "pisoCentavos": 74728
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 99,
+   "pisoCentavos": 141787
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 100,
+   "pisoCentavos": 142540
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 333,
+   "pisoCentavos": 318099
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 500,
+   "pisoCentavos": 443928
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 777,
+   "pisoCentavos": 652639
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 1234,
+   "pisoCentavos": 996975
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 6,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2326850
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 1,
+   "pisoCentavos": 83993
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 7,
+   "pisoCentavos": 88957
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 10,
+   "pisoCentavos": 91439
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 99,
+   "pisoCentavos": 165066
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 100,
+   "pisoCentavos": 165893
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 333,
+   "pisoCentavos": 358647
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 500,
+   "pisoCentavos": 496801
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 777,
+   "pisoCentavos": 725955
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1104017
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 7,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2564149
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 1,
+   "pisoCentavos": 91273
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 7,
+   "pisoCentavos": 96920
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 10,
+   "pisoCentavos": 99743
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 99,
+   "pisoCentavos": 183505
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 100,
+   "pisoCentavos": 184446
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 333,
+   "pisoCentavos": 403732
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 500,
+   "pisoCentavos": 560902
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 777,
+   "pisoCentavos": 821598
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1251699
+  },
+  {
+   "tipoCarga": "carga-geral",
+   "eixos": 9,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2912811
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 1,
+   "pisoCentavos": 46470
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 7,
+   "pisoCentavos": 48933
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 10,
+   "pisoCentavos": 50165
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 99,
+   "pisoCentavos": 86704
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 100,
+   "pisoCentavos": 87115
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 333,
+   "pisoCentavos": 182775
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 500,
+   "pisoCentavos": 251339
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 777,
+   "pisoCentavos": 365064
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 1234,
+   "pisoCentavos": 552690
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 2,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1277328
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 1,
+   "pisoCentavos": 55750
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 7,
+   "pisoCentavos": 58903
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 10,
+   "pisoCentavos": 60479
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 99,
+   "pisoCentavos": 107253
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 100,
+   "pisoCentavos": 107779
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 333,
+   "pisoCentavos": 230232
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 500,
+   "pisoCentavos": 317999
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 777,
+   "pisoCentavos": 463576
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 1234,
+   "pisoCentavos": 703753
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 3,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1631348
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 1,
+   "pisoCentavos": 60295
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 7,
+   "pisoCentavos": 63863
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 10,
+   "pisoCentavos": 65648
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 99,
+   "pisoCentavos": 118581
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 100,
+   "pisoCentavos": 119176
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 333,
+   "pisoCentavos": 257755
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 500,
+   "pisoCentavos": 357080
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 777,
+   "pisoCentavos": 521829
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 1234,
+   "pisoCentavos": 793634
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 4,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1843385
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 1,
+   "pisoCentavos": 67168
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 7,
+   "pisoCentavos": 71281
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 10,
+   "pisoCentavos": 73338
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 99,
+   "pisoCentavos": 134346
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 100,
+   "pisoCentavos": 135031
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 333,
+   "pisoCentavos": 294748
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 500,
+   "pisoCentavos": 409223
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 777,
+   "pisoCentavos": 599101
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 1234,
+   "pisoCentavos": 912365
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 5,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2122238
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 1,
+   "pisoCentavos": 68757
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 7,
+   "pisoCentavos": 73296
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 10,
+   "pisoCentavos": 75565
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 99,
+   "pisoCentavos": 142886
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 100,
+   "pisoCentavos": 143642
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 333,
+   "pisoCentavos": 319886
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 500,
+   "pisoCentavos": 446206
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 777,
+   "pisoCentavos": 655732
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1001411
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 6,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2336475
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 1,
+   "pisoCentavos": 82857
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 7,
+   "pisoCentavos": 87796
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 10,
+   "pisoCentavos": 90266
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 99,
+   "pisoCentavos": 163527
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 100,
+   "pisoCentavos": 164350
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 333,
+   "pisoCentavos": 356146
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 500,
+   "pisoCentavos": 493614
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 777,
+   "pisoCentavos": 721629
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1097813
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 7,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2550691
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 1,
+   "pisoCentavos": 91834
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 7,
+   "pisoCentavos": 97493
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 10,
+   "pisoCentavos": 100323
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 99,
+   "pisoCentavos": 184266
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 100,
+   "pisoCentavos": 185209
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 333,
+   "pisoCentavos": 404970
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 500,
+   "pisoCentavos": 562481
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 777,
+   "pisoCentavos": 823742
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1254775
+  },
+  {
+   "tipoCarga": "granel-solido",
+   "eixos": 9,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2919488
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 1,
+   "pisoCentavos": 47616
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 7,
+   "pisoCentavos": 50124
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 10,
+   "pisoCentavos": 51378
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 99,
+   "pisoCentavos": 88576
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 100,
+   "pisoCentavos": 88994
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 333,
+   "pisoCentavos": 186379
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 500,
+   "pisoCentavos": 256178
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 777,
+   "pisoCentavos": 371953
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 1234,
+   "pisoCentavos": 562961
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 2,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1300660
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 1,
+   "pisoCentavos": 57492
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 7,
+   "pisoCentavos": 60703
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 10,
+   "pisoCentavos": 62308
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 99,
+   "pisoCentavos": 109933
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 100,
+   "pisoCentavos": 110468
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 333,
+   "pisoCentavos": 235149
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 500,
+   "pisoCentavos": 324512
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 777,
+   "pisoCentavos": 472737
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 1234,
+   "pisoCentavos": 717283
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 3,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1661752
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 1,
+   "pisoCentavos": 62762
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 7,
+   "pisoCentavos": 66423
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 10,
+   "pisoCentavos": 68254
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 99,
+   "pisoCentavos": 122561
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 100,
+   "pisoCentavos": 123171
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 333,
+   "pisoCentavos": 265345
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 500,
+   "pisoCentavos": 367247
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 777,
+   "pisoCentavos": 536270
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 1234,
+   "pisoCentavos": 815126
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 4,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1892112
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 1,
+   "pisoCentavos": 70010
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 7,
+   "pisoCentavos": 74224
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 10,
+   "pisoCentavos": 76331
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 99,
+   "pisoCentavos": 138832
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 100,
+   "pisoCentavos": 139534
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 333,
+   "pisoCentavos": 303161
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 500,
+   "pisoCentavos": 420438
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 777,
+   "pisoCentavos": 614964
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 1234,
+   "pisoCentavos": 935897
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 5,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2175386
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 1,
+   "pisoCentavos": 71746
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 7,
+   "pisoCentavos": 76388
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 10,
+   "pisoCentavos": 78709
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 99,
+   "pisoCentavos": 147570
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 100,
+   "pisoCentavos": 148344
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 333,
+   "pisoCentavos": 328621
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 500,
+   "pisoCentavos": 457832
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 777,
+   "pisoCentavos": 672152
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1025742
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 6,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2391358
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 1,
+   "pisoCentavos": 84887
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 7,
+   "pisoCentavos": 89909
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 10,
+   "pisoCentavos": 92420
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 99,
+   "pisoCentavos": 166913
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 100,
+   "pisoCentavos": 167750
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 333,
+   "pisoCentavos": 362771
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 500,
+   "pisoCentavos": 502550
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 777,
+   "pisoCentavos": 734399
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1116908
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 7,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2594213
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 1,
+   "pisoCentavos": 94435
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 7,
+   "pisoCentavos": 100190
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 10,
+   "pisoCentavos": 103067
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 99,
+   "pisoCentavos": 188426
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 100,
+   "pisoCentavos": 189385
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 333,
+   "pisoCentavos": 412853
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 500,
+   "pisoCentavos": 573021
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 777,
+   "pisoCentavos": 838689
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1276993
+  },
+  {
+   "tipoCarga": "granel-liquido",
+   "eixos": 9,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2969787
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 1,
+   "pisoCentavos": 52489
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 7,
+   "pisoCentavos": 55383
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 10,
+   "pisoCentavos": 56830
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 99,
+   "pisoCentavos": 99759
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 100,
+   "pisoCentavos": 100241
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 333,
+   "pisoCentavos": 212626
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 500,
+   "pisoCentavos": 293177
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 777,
+   "pisoCentavos": 426785
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 1234,
+   "pisoCentavos": 647215
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 2,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1498545
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 1,
+   "pisoCentavos": 62944
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 7,
+   "pisoCentavos": 66643
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 10,
+   "pisoCentavos": 68493
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 99,
+   "pisoCentavos": 123369
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 100,
+   "pisoCentavos": 123986
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 333,
+   "pisoCentavos": 267651
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 500,
+   "pisoCentavos": 370622
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 777,
+   "pisoCentavos": 541417
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 1234,
+   "pisoCentavos": 823199
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 3,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1911480
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 1,
+   "pisoCentavos": 69366
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 7,
+   "pisoCentavos": 73587
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 10,
+   "pisoCentavos": 75698
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 99,
+   "pisoCentavos": 138305
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 100,
+   "pisoCentavos": 139008
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 333,
+   "pisoCentavos": 302912
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 500,
+   "pisoCentavos": 420388
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 777,
+   "pisoCentavos": 615244
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 1234,
+   "pisoCentavos": 936720
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 4,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2178310
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 1,
+   "pisoCentavos": 76604
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 7,
+   "pisoCentavos": 81442
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 10,
+   "pisoCentavos": 83860
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 99,
+   "pisoCentavos": 155615
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 100,
+   "pisoCentavos": 156421
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 333,
+   "pisoCentavos": 344273
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 500,
+   "pisoCentavos": 478913
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 777,
+   "pisoCentavos": 702239
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1070686
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 5,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2493682
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 1,
+   "pisoCentavos": 78124
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 7,
+   "pisoCentavos": 83459
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 10,
+   "pisoCentavos": 86126
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 99,
+   "pisoCentavos": 165257
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 100,
+   "pisoCentavos": 166146
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 333,
+   "pisoCentavos": 373309
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 500,
+   "pisoCentavos": 521790
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 777,
+   "pisoCentavos": 768073
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1174397
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 6,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2743676
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 1,
+   "pisoCentavos": 99257
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 7,
+   "pisoCentavos": 105145
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 10,
+   "pisoCentavos": 108089
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 99,
+   "pisoCentavos": 195429
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 100,
+   "pisoCentavos": 196410
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 333,
+   "pisoCentavos": 425062
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 500,
+   "pisoCentavos": 588946
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 777,
+   "pisoCentavos": 860777
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1309250
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 7,
+   "distanciaKm": 2999,
+   "pisoCentavos": 3041315
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 1,
+   "pisoCentavos": 107821
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 7,
+   "pisoCentavos": 114510
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 10,
+   "pisoCentavos": 117854
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 99,
+   "pisoCentavos": 217070
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 100,
+   "pisoCentavos": 218185
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 333,
+   "pisoCentavos": 477931
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 500,
+   "pisoCentavos": 664101
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 777,
+   "pisoCentavos": 972898
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1482357
+  },
+  {
+   "tipoCarga": "frigorificada",
+   "eixos": 9,
+   "distanciaKm": 2999,
+   "pisoCentavos": 3449961
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 1,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 7,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 10,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 99,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 100,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 333,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 500,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 777,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 1234,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 2,
+   "distanciaKm": 2999,
+   "pisoCentavos": null
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 1,
+   "pisoCentavos": 54998
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 7,
+   "pisoCentavos": 58135
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 10,
+   "pisoCentavos": 59703
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 99,
+   "pisoCentavos": 106234
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 100,
+   "pisoCentavos": 106757
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 333,
+   "pisoCentavos": 228574
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 500,
+   "pisoCentavos": 315885
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 777,
+   "pisoCentavos": 460706
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 1234,
+   "pisoCentavos": 699635
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 3,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1622412
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 1,
+   "pisoCentavos": 58303
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 7,
+   "pisoCentavos": 61828
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 10,
+   "pisoCentavos": 63591
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 99,
+   "pisoCentavos": 115882
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 100,
+   "pisoCentavos": 116470
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 333,
+   "pisoCentavos": 253369
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 500,
+   "pisoCentavos": 351490
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 777,
+   "pisoCentavos": 514241
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 1234,
+   "pisoCentavos": 782752
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 4,
+   "distanciaKm": 2999,
+   "pisoCentavos": 1819777
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 1,
+   "pisoCentavos": 65408
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 7,
+   "pisoCentavos": 69483
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 10,
+   "pisoCentavos": 71520
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 99,
+   "pisoCentavos": 131960
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 100,
+   "pisoCentavos": 132639
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 333,
+   "pisoCentavos": 290869
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 500,
+   "pisoCentavos": 404279
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 777,
+   "pisoCentavos": 592390
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 1234,
+   "pisoCentavos": 902738
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 5,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2101350
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 1,
+   "pisoCentavos": 66951
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 7,
+   "pisoCentavos": 71450
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 10,
+   "pisoCentavos": 73700
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 99,
+   "pisoCentavos": 140437
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 100,
+   "pisoCentavos": 141187
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 333,
+   "pisoCentavos": 315904
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 500,
+   "pisoCentavos": 441131
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 777,
+   "pisoCentavos": 648842
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 1234,
+   "pisoCentavos": 991528
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 6,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2315031
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 1,
+   "pisoCentavos": 82792
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 7,
+   "pisoCentavos": 87729
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 10,
+   "pisoCentavos": 90198
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 99,
+   "pisoCentavos": 163438
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 100,
+   "pisoCentavos": 164261
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 333,
+   "pisoCentavos": 356001
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 500,
+   "pisoCentavos": 493429
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 777,
+   "pisoCentavos": 721378
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1097452
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 7,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2549906
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 1,
+   "pisoCentavos": 89540
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 7,
+   "pisoCentavos": 95149
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 10,
+   "pisoCentavos": 97954
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 99,
+   "pisoCentavos": 181156
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 100,
+   "pisoCentavos": 182091
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 333,
+   "pisoCentavos": 399913
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 500,
+   "pisoCentavos": 556035
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 777,
+   "pisoCentavos": 814991
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 1234,
+   "pisoCentavos": 1242222
+  },
+  {
+   "tipoCarga": "conteinerizada",
+   "eixos": 9,
+   "distanciaKm": 2999,
+   "pisoCentavos": 2892250
+  }
+ ]
+}
