@@ -118,6 +118,9 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - Aceite do embarcador por link, atestado pela plataforma. Exige o token de aceite de uso único gerado na emissão da oferta. Só o destinatário pode aceitar, só dentro da validade e uma vez só.
 - Registro SQLite só de inclusão: os gatilhos recusam UPDATE e DELETE, e a corrente de hashes denuncia adulteração direta no arquivo.
 - Relatório de verificação com 14 checagens independentes, refeitas a partir do registro.
+- API HTTP (FastAPI) em que as empresas assinam do lado delas: a API nunca recebe chave privada.
+- Página pública `/verificar/{id}`, em português, com as 14 checagens (OK ou FALHA) e o resultado final.
+- Registro persistido no arquivo de `ELO_DB` (padrão `elo.db`): compromissos continuam verificáveis depois de reiniciar a API.
 
 ## Estrutura
 
