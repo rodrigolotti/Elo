@@ -320,7 +320,7 @@ async function emitirMandatoPelaTela(p, captura) {
   await p.preencher("form textarea", "carga geral");
   if (captura) await p.capturar(captura);
   await p.clicar("Emitir mandato");
-  await p.aguardarTexto("emitido.");
+  await p.aguardarTexto("emitido: até R$ 6.000,00 por frete.");
   await p.aguardar("[...document.querySelectorAll('.etiqueta.bom')].some((e) => e.textContent === 'Ativo')");
 }
 
@@ -508,6 +508,7 @@ async function roteiro() {
 
   console.log("5. Agente emite ofertas (2 fora do mandato, 1 dentro)");
   const pedido = await http("POST", "/pedidos", { cnpj_solicitante: CNPJ_EMBARC, canal: "email",
+    nome_solicitante: "Comercial Exemplo de Alimentos Ltda (fictícia)",
     carga: { origem_cep: "01000-000", origem_uf: "SP", destino_cep: "80000-000",
              destino_uf: "PR", peso_kg: 3200, volume_litros: 14500, tipo: "carga geral" } });
   const aprovar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 900_000);
@@ -523,6 +524,16 @@ async function roteiro() {
   await p.aguardar("document.querySelector('nav .contador')?.textContent === '2'");
   await p.capturar("fila-aprovacao");
   ok("duas ofertas na fila, com contador no menu");
+  for (const trecho of ["Comercial Exemplo de Alimentos Ltda (fictícia)",
+    "Primeiro frete com este embarcador", "carga geral · 3.200 kg · 14,5 m³",
+    "Peso cubado: 4.350 kg (300 kg/m³), maior que o peso real", "vence em 23 h",
+    "R$ 9.000,00 · SP (01000-000) → PR (80000-000)"]) {
+    await p.aguardarTexto(trecho);
+  }
+  if (await p.avaliar("document.querySelector('main').innerText.includes('14500 L')")) {
+    falhar("o volume ainda aparece em litros");
+  }
+  ok("cartão: nome do embarcador, primeiro frete, volume em m³, peso cubado e 'vence em 23 h'");
 
   const cartao = (id) => `[...document.querySelectorAll("article.cartao")].find((c) => c.innerText.includes(${JSON.stringify(id)}))`;
   await p.clicar("Aprovar", cartao(aprovar.oferta.id));
@@ -530,7 +541,7 @@ async function roteiro() {
   await p.preencher("dialog input", "Ana Gestora");
   await p.capturar("dialogo-aprovacao");
   await p.clicar("Aprovar oferta", "document.querySelector('dialog')");
-  await p.aguardarTexto(`Oferta ${aprovar.oferta.id} aprovada.`);
+  await p.aguardarTexto("Frete de R$ 9.000,00 (SP → PR) aprovado e enviado ao embarcador.");
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
   ok("oferta aprovada com assinatura do navegador");
 
@@ -542,7 +553,7 @@ async function roteiro() {
   await p.preencher("dialog textarea", "Valor acima da tabela do cliente");
   await p.capturar("dialogo-recusa");
   await p.clicar("Recusar oferta", "document.querySelector('dialog')");
-  await p.aguardarTexto(`Oferta ${recusar.oferta.id} recusada.`);
+  await p.aguardarTexto("Frete de R$ 7.500,00 (SP → PR) recusado.");
   await p.aguardarTexto("Nenhuma oferta aguardando aprovação.");
   ok("oferta recusada; fila vazia");
 
@@ -595,6 +606,8 @@ async function roteiro() {
   await p.aguardar("location.hash === '#/aprovacoes'");
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
   ok("saiu (token encerrado) e entrou de novo assinando o desafio");
+  await p.aguardarTexto("2 fretes já fechados com ele");
+  ok("depois de 2 aceites, a oferta nova mostra '2 fretes já fechados com ele'");
   await p.menu("/seguranca");
   await p.aguardarTexto("Histórico de acesso");
   await p.aguardarTexto("Criado em");

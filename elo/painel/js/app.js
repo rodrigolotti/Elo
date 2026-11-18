@@ -15,8 +15,9 @@ import {
   avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
 } from "./ui.js";
 import {
-  UFS, centavosDeReais, chavePublicaValida, dataBr, emBrasilia, isoDeBrasilia, lista,
-  localDeBrasilia, reais, rota, soDigitos,
+  FATOR_CUBAGEM_KG_POR_M3, UFS, centavosDeReais, chavePublicaValida, dataBr, emBrasilia,
+  isoDeBrasilia, lista, localDeBrasilia, metrosCubicos, numero, pesoCubadoKg, prazoAte, reais,
+  resumoFrete, rota, soDigitos,
 } from "./formatos.js";
 
 const topo = document.getElementById("topo");
@@ -327,27 +328,49 @@ function campoResponsavel() {
   return { entrada, rotulo: campo("Seu nome (fica registrado na decisão)", entrada) };
 }
 
+/** "Comercial Exemplo Ltda" + CNPJ + quantos fretes já foram fechados com ele. */
+function blocoEmbarcador(embarcador) {
+  const n = embarcador.fretes_fechados;
+  const historico = n === 0 ? "Primeiro frete com este embarcador"
+    : `${n} frete${n > 1 ? "s" : ""} já fechado${n > 1 ? "s" : ""} com ele`;
+  return h("div", {},
+    h("div", {}, embarcador.nome ?? "Nome não informado no pedido"),
+    h("div", { class: "ajuda" }, mono(embarcador.cnpj), ` · ${historico}`));
+}
+
+/** "carga geral · 3.200 kg · 14,5 m³" e, embaixo, o peso cubado. */
+function blocoCarga(carga) {
+  const cubado = pesoCubadoKg(carga.volume_litros);
+  return h("div", {},
+    h("div", {}, `${carga.tipo} · ${numero(carga.peso_kg)} kg · ${metrosCubicos(carga.volume_litros)}`),
+    h("div", { class: "ajuda" }, `Peso cubado: ${numero(cubado)} kg `
+      + `(${FATOR_CUBAGEM_KG_POR_M3} kg/m³)`
+      + (cubado > carga.peso_kg ? ", maior que o peso real" : "")));
+}
+
 function cartaoOferta(item, agentes) {
-  const { oferta, violacoes } = item;
+  const { oferta, violacoes, embarcador } = item;
   const c = oferta.condicoes;
   const vencida = new Date(oferta.valida_ate) < new Date();
+  const frete = resumoFrete(oferta);
+  const nomeEmbarcador = embarcador.nome ?? embarcador.cnpj;
   const aprovar = h("button", { type: "button", class: "botao primario" }, "Aprovar");
   const recusar = h("button", { type: "button", class: "botao perigo-contorno" }, "Recusar");
 
   async function decidir(botao, tipo) {
     const responsavel = campoResponsavel();
     const motivo = h("textarea", { maxlength: 1000, rows: 3 });
-    const resumo = `oferta ${oferta.id} de ${reais(c.valor_centavos)} para ${oferta.destinatario_cnpj}`;
+    const resumo = `${frete.charAt(0).toLowerCase()}${frete.slice(1)} para ${nomeEmbarcador}`;
     const ok = await confirmar(tipo === "aprovacao" ? {
       titulo: "Aprovar oferta",
-      corpo: [`Você vai aprovar a ${resumo}. A aprovação fica registrada em nome da `
+      corpo: [`Você vai aprovar o ${resumo}. A aprovação fica registrada em nome da `
               + "transportadora e não pode ser apagada.",
               "Depois disso o embarcador pode aceitá-la pelo link enviado pelo agente."],
       botao: "Aprovar oferta",
       campos: [responsavel.rotulo],
     } : {
       titulo: "Recusar oferta",
-      corpo: [`Você vai recusar a ${resumo}. A recusa é definitiva: a oferta não `
+      corpo: [`Você vai recusar o ${resumo}. A recusa é definitiva: a oferta não `
               + "poderá mais ser aprovada nem aceita."],
       botao: "Recusar oferta",
       perigo: true,
@@ -367,7 +390,7 @@ function cartaoOferta(item, agentes) {
             rotaEnvio: `${base}/aprovacao`,
             esperado: { tipo: "aprovacao", oferta_hash, aprovado_por: nome },
           });
-          avisar(`Oferta ${oferta.id} aprovada.`);
+          avisar(`${frete} aprovado e enviado ao embarcador.`);
         } else {
           const texto = motivo.value.trim();
           await api.assinarEEnviar({
@@ -375,7 +398,7 @@ function cartaoOferta(item, agentes) {
             rotaEnvio: `${base}/recusa`,
             esperado: { tipo: "recusa", oferta_hash, recusado_por: nome, motivo: texto },
           });
-          avisar(`Oferta ${oferta.id} recusada.`);
+          avisar(`${frete} recusado. O embarcador não poderá aceitá-lo.`);
         }
         recarregar();
       } catch (erro) {
@@ -389,19 +412,22 @@ function cartaoOferta(item, agentes) {
   const agente = agentes.get(oferta.emissor.agente_id);
   return h("article", { class: "cartao" },
     h("div", { class: "cartao-topo" },
-      h("div", {}, h("h2", {}, reais(c.valor_centavos)), mono(oferta.id)),
-      vencida ? h("span", { class: "etiqueta ruim" }, "Validade vencida") : null),
+      h("div", {}, h("h2", {}, `${reais(c.valor_centavos)} · ${rota(oferta.carga)}`),
+        h("div", { class: "ajuda" }, nomeEmbarcador, " · ", mono(oferta.id))),
+      h("span", { class: `etiqueta ${vencida ? "ruim" : "neutro"}`,
+                  title: `Válida até ${emBrasilia(oferta.valida_ate)}` },
+        prazoAte(oferta.valida_ate))),
     h("div", { class: "caixa motivo" },
       h("h3", {}, "Por que precisa de aprovação"),
       h("ul", {}, violacoes.map((v) => h("li", {}, v)))),
     dados([
-      ["Embarcador", mono(oferta.destinatario_cnpj)],
+      ["Embarcador", blocoEmbarcador(embarcador)],
       ["Rota", rota(oferta.carga)],
-      ["Carga", `${oferta.carga.tipo}, ${oferta.carga.peso_kg} kg, ${oferta.carga.volume_litros} L`],
+      ["Carga", blocoCarga(oferta.carga)],
       ["Coleta até", dataBr(c.coleta_ate)],
       ["Prazo de entrega", `${c.prazo_entrega_dias_uteis} dias úteis`],
       c.inclui.length ? ["Inclui", c.inclui.join(", ")] : null,
-      ["Válida até", emBrasilia(oferta.valida_ate)],
+      ["Válida até", `${emBrasilia(oferta.valida_ate)} (${prazoAte(oferta.valida_ate)})`],
       ["Emitida em", emBrasilia(oferta.emitida_em)],
       ["Agente", agente ? agente.nome : oferta.emissor.agente_id],
       ["Mandato", mono(oferta.mandato_id)],
@@ -497,8 +523,8 @@ function cartaoMandato(item) {
   revogar?.addEventListener("click", async () => {
     const ok = await confirmar({
       titulo: "Revogar mandato",
-      corpo: [`Você vai revogar o mandato ${mandato.id} de `
-              + `${item.agente_nome ?? mandato.agente_id}.`,
+      corpo: [`Você vai revogar o mandato de ${item.agente_nome ?? mandato.agente_id} `
+              + `(até ${reais(l.valor_max_centavos)} por frete).`,
               "É irreversível. A partir de agora, ofertas feitas com este mandato vão para "
               + "aprovação humana. Compromissos já firmados continuam válidos."],
       botao: "Confirmar revogação",
@@ -512,7 +538,8 @@ function cartaoMandato(item) {
           rotaRascunho: `${base}/rascunho`, corpo: {}, rotaEnvio: base,
           esperado: { tipo: "revogacao", mandato_id: mandato.id },
         });
-        avisar(`Mandato ${mandato.id} revogado.`);
+        avisar(`Mandato de ${item.agente_nome ?? mandato.agente_id} revogado. Novas ofertas `
+          + "dele vão para a sua aprovação.");
         recarregar();
       } catch (erro) {
         avisarErro(erro);
@@ -593,7 +620,10 @@ async function telaMandatos() {
           rotaEnvio: "/mandatos",
           esperado: { tipo: "mandato", cnpj: atual.cnpj, agente_id: agente.value, limites },
         });
-        avisar(`Mandato ${mandato.id} emitido.`);
+        const nomeAgente = agentes.find((a) => a.agente_id === mandato.agente_id)?.nome
+          ?? mandato.agente_id;
+        avisar(`Mandato de ${nomeAgente} emitido: até ${reais(limites.valor_max_centavos)} `
+          + "por frete.");
         recarregar();
       } catch (erro) {
         avisarErro(erro);
@@ -622,9 +652,11 @@ async function telaHistorico() {
     compromissos.length === 0 ? vazio("Nenhum compromisso firmado ainda.") : h("table", {},
       h("thead", {}, h("tr", {},
         ["Aceite em", "Embarcador", "Valor", "Rota", "Compromisso", ""].map((t) => h("th", {}, t)))),
-      h("tbody", {}, compromissos.map(({ compromisso: cp, oferta, verificacao }) => h("tr", {},
+      h("tbody", {}, compromissos.map(({ compromisso: cp, oferta, verificacao, embarcador }) => h("tr", {},
         h("td", {}, emBrasilia(cp.aceite.em)),
-        h("td", {}, mono(cp.aceite.cnpj), h("div", { class: "ajuda" }, cp.aceite.nome)),
+        h("td", {}, embarcador?.nome ?? mono(cp.aceite.cnpj),
+          h("div", { class: "ajuda" }, embarcador?.nome ? mono(cp.aceite.cnpj) : null,
+            embarcador?.nome ? " · " : null, `aceito por ${cp.aceite.nome}`)),
         h("td", { class: "numero" }, reais(oferta.condicoes.valor_centavos)),
         h("td", {}, rota(oferta.carga)),
         h("td", {}, mono(cp.id)),

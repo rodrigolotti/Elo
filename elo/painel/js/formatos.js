@@ -92,3 +92,41 @@ export function chavePublicaValida(base64) {
 export function lista(texto) {
   return [...new Set(String(texto).split(/[\n,]/).map((x) => x.trim()).filter(Boolean))];
 }
+
+// ---------- carga e prazo, para a tela de aprovação ----------
+
+/** Fator de cubagem usado no transporte rodoviário: 300 kg por m³. */
+export const FATOR_CUBAGEM_KG_POR_M3 = 300;
+
+/** 3200 -> "3.200" */
+export function numero(inteiro) {
+  return `${inteiro < 0 ? "-" : ""}${milhares(String(Math.abs(Math.trunc(inteiro))))}`;
+}
+
+/** 14500 litros -> "14,5 m³" (conta com inteiros, sem float). */
+export function metrosCubicos(litros) {
+  const inteiro = Math.trunc(litros / 1000);
+  const fracao = String(litros % 1000).padStart(3, "0").replace(/0+$/, "");
+  return `${numero(inteiro)}${fracao ? `,${fracao}` : ""} m³`;
+}
+
+/** Peso cubado em kg (arredondado para cima): litros/1000 × fator. */
+export function pesoCubadoKg(litros, fator = FATOR_CUBAGEM_KG_POR_M3) {
+  return Math.ceil((litros * fator) / 1000);
+}
+
+/** "vence em 23 h", "vence em 45 min", "vence em 3 dias", "venceu há 2 h". */
+export function prazoAte(iso, agora = Date.now()) {
+  const diferenca = new Date(iso).getTime() - agora;
+  const minutos = Math.floor(Math.abs(diferenca) / 60_000);
+  const texto = minutos < 60 ? `${Math.max(minutos, 1)} min`
+    : minutos < 48 * 60 ? `${Math.floor(minutos / 60)} h`
+    : `${Math.floor(minutos / (24 * 60))} dias`;
+  return diferenca >= 0 ? `vence em ${texto}` : `venceu há ${texto}`;
+}
+
+/** "Frete de R$ 9.000,00 (SP → PR)" */
+export function resumoFrete(oferta) {
+  return `Frete de ${reais(oferta.condicoes.valor_centavos)} `
+    + `(${oferta.carga.origem_uf} → ${oferta.carga.destino_uf})`;
+}

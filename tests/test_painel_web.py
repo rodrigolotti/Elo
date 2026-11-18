@@ -201,3 +201,31 @@ def test_conferencia_recusa_resposta_que_nao_e_objeto(navegador):
 
 def test_painel_existe_no_pacote():
     assert Path(PASTA_PAINEL, "index.html").is_file()
+
+
+# ---------- carga, prazo e resumo do frete ----------
+
+@pytest.mark.parametrize("litros, texto", [(14_500, "14,5 m³"), (1_000, "1 m³"), (0, "0 m³"),
+                                           (1_234_567, "1.234,567 m³"), (250, "0,25 m³")])
+def test_volume_em_metros_cubicos(navegador, litros, texto):
+    assert chamar(navegador, "formatos.js", "metrosCubicos", litros) == texto
+
+
+@pytest.mark.parametrize("litros, kg", [(14_500, 4_350), (1_000, 300), (1, 1), (0, 0)])
+def test_peso_cubado_com_fator_300(navegador, litros, kg):
+    assert chamar(navegador, "formatos.js", "pesoCubadoKg", litros) == kg
+
+
+@pytest.mark.parametrize("minutos, texto", [
+    (23 * 60 + 59, "vence em 23 h"), (45, "vence em 45 min"), (0.2, "vence em 1 min"),
+    (47 * 60, "vence em 47 h"), (72 * 60, "vence em 3 dias"), (-125, "venceu há 2 h")])
+def test_prazo_ate_vencer(navegador, minutos, texto):
+    agora = 1_800_000_000_000
+    alvo = datetime.fromtimestamp((agora + minutos * 60_000) / 1000, tz=timezone.utc).isoformat()
+    assert chamar(navegador, "formatos.js", "prazoAte", alvo, agora) == texto
+
+
+def test_resumo_do_frete(navegador):
+    oferta = {"condicoes": {"valor_centavos": 900_000},
+              "carga": {"origem_uf": "SP", "destino_uf": "PR"}}
+    assert chamar(navegador, "formatos.js", "resumoFrete", oferta) == "Frete de R$ 9.000,00 (SP → PR)"

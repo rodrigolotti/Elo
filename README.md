@@ -280,7 +280,10 @@ python scripts\simular_agente.py aceitar --oferta of_... --token ...
   ignora. Para trocar de agente, `chave --substituir`.
 - Outras opções: `--url` (padrão `http://127.0.0.1:8000`), `--embarcador`,
   `--origem`, `--destino` e `--tipo`. Veja `python scripts\simular_agente.py oferta --help`.
-- O embarcador fictício usa o CNPJ de exemplo `22.333.444/0001-81`.
+- O embarcador é fictício e **nunca é a própria transportadora**: o simulador usa
+  "Comercial Exemplo de Alimentos Ltda" (`22.333.444/0001-81`) ou, se esse for o CNPJ
+  da transportadora, "Distribuidora Exemplo S.A." (`33.444.555/0001-81`), e mostra
+  qual usou. O `aceitar` usa automaticamente o embarcador que recebeu a oferta.
 
 ### Verificação num Chrome de verdade
 
@@ -356,7 +359,8 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - Cadastro de organização por CNPJ (com dígitos verificadores) e chave Ed25519 própria.
 - Certificado do agente, assinado pela chave da organização.
 - Mandato assinado: valor máximo, UFs de origem e destino, tipos de carga e validade. Pode ser revogado (revogação também assinada pela organização). A revogação vale pela ordem do registro: ofertas registradas antes dela continuam autorizadas, as registradas depois saem do mandato, mesmo que caiam no mesmo segundo.
-- Oferta assinada pelo agente. Se ela sair do mandato, fica aguardando aprovação humana.
+- Oferta assinada pelo agente. Se ela sair do mandato, fica aguardando aprovação humana. A oferta não pode ter como destinatário a própria transportadora que a emite.
+- Na fila de aprovação, cada oferta mostra o nome do embarcador e quantos fretes já foram fechados com ele, o volume em m³ com o peso cubado e quanto falta para vencer.
 - Aprovação humana assinada com a chave da organização, ou recusa definitiva, também assinada e gravada no registro. Uma oferta recusada não pode mais ser aprovada nem aceita.
 - Aceite do embarcador por link, atestado pela plataforma. Exige o token de aceite de uso único gerado na emissão da oferta. Só o destinatário pode aceitar, só dentro da validade e uma vez só.
 - Registro SQLite só de inclusão: os gatilhos recusam UPDATE e DELETE, e a corrente de hashes denuncia adulteração direta no arquivo.
@@ -410,7 +414,8 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 
 - **O aceite por link é atestado pela plataforma, não assinado pelo embarcador.** É mais fraco que uma assinatura própria. A V2 deve oferecer chave ao embarcador ou integração com ICP-Brasil.
 - **Quem controla o banco inteiro pode reescrever a corrente toda.** A defesa é publicar periodicamente o hash mais recente num lugar externo (ancoragem). Ainda não está implementado.
-- **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores.
+- **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores. O nome do embarcador mostrado no painel é o informado no pedido, sem conferência.
+- **Peso cubado com fator fixo de 300 kg/m³**, a praxe do rodoviário. Contratos com outro fator ainda não são considerados.
 - **Validade jurídica:** a assinatura Ed25519 própria não é certificado ICP-Brasil. Antes de um piloto real, valide com um advogado.
 - **Desempenho:** a verificação relê o registro inteiro. Isso basta para a V1, mas exige índices e snapshots em escala.
 - **As consultas exigem sessão, mas as rotas de escrita não.** O que importa é protegido por assinatura (organização e agente) ou pelo token de aceite, mas qualquer um consegue, por exemplo, registrar pedidos ou pedir rascunhos. Os desafios de login têm teto de 5 pendentes por organização: passou disso, o mais antigo é descartado.
