@@ -6,6 +6,7 @@ Rode com:  python3 demo.py
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 
 from elo.chaves import ParDeChaves
@@ -132,4 +133,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # O console do Windows (cp1252) não tem "→" e quebraria a demo, sobretudo
+    # com a saída em pipe ou redirecionada: a saída é sempre UTF-8.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     main()
