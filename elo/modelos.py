@@ -46,6 +46,13 @@ class Condicoes(_Base):
     coleta_ate: date
     prazo_entrega_dias_uteis: int = Field(ge=0, le=60)
     inclui: list[str] = Field(default_factory=list)
+    # Informados e assinados pelo agente; opcionais (ofertas antigas não têm).
+    # O piso mínimo da ANTT (Tabela A) só vale para carga lotação.
+    modalidade: Literal["lotacao", "fracionada"] | None = None
+    distancia_km: int | None = Field(default=None, gt=0, le=10_000,
+                                     description="Distância da ida, em km inteiros")
+    eixos: Literal[2, 3, 4, 5, 6, 7, 9] | None = Field(
+        default=None, description="Eixos carregados do veículo, como na Tabela A da ANTT")
 
 
 class LimitesMandato(_Base):

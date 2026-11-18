@@ -8,13 +8,39 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .antt import nome_tipo_carga, normalizar_tipo_carga
+from .antt import (
+    TIPOS_CARGA, nome_tipo_carga, normalizar_tipo_carga, piso_centavos, tabela_vigente,
+)
 from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
 
 
 def _categoria(tipo: str) -> str:
     # dados antigos em texto livre: compara pela categoria da ANTT quando der
     return normalizar_tipo_carga(tipo) or tipo
+
+
+AVISO_PISO = "abaixo do piso mínimo da ANTT: risco de multa e indenização"
+
+
+def piso_da_oferta(carga: Carga, condicoes: Condicoes,
+                   momento: datetime) -> dict[str, object] | None:
+    """Piso da Tabela A para a oferta, se ela for de carga lotação e trouxer
+    distância e eixos. Usa a tabela vigente no momento da emissão. None quando
+    não há como calcular (fracionado, dados faltando, categoria fora da lista,
+    célula sem coeficiente na norma ou data anterior à primeira tabela)."""
+    if (condicoes.modalidade != "lotacao" or condicoes.distancia_km is None
+            or condicoes.eixos is None):
+        return None
+    tabela = tabela_vigente(momento)
+    categoria = normalizar_tipo_carga(carga.tipo)
+    if tabela is None or categoria is None:
+        return None
+    piso = piso_centavos(categoria, condicoes.eixos, condicoes.distancia_km, tabela)
+    if piso is None:
+        return None
+    return {"piso_centavos": piso, "categoria": categoria, "nome": TIPOS_CARGA[categoria],
+            "eixos": condicoes.eixos, "distancia_km": condicoes.distancia_km,
+            "norma": tabela.norma, "vigencia_desde": tabela.vigencia_desde}
 
 
 def reais(centavos: int) -> str:
@@ -32,6 +58,14 @@ def violacoes(
 ) -> list[str]:
     """Lista os motivos pelos quais a oferta sai do mandato. Vazia = dentro."""
     problemas: list[str] = []
+
+    piso = piso_da_oferta(carga, condicoes, momento)
+    if piso is not None and condicoes.valor_centavos < piso["piso_centavos"]:
+        problemas.append(
+            f"{AVISO_PISO} (piso de {reais(piso['piso_centavos'])} para "
+            f"{piso['distancia_km']} km, {piso['eixos']} eixos, {piso['nome']}; "
+            f"tabela da ANTT vigente desde {piso['vigencia_desde'][8:10]}/"
+            f"{piso['vigencia_desde'][5:7]}/{piso['vigencia_desde'][:4]})")
 
     if revogado_em is not None and ler_momento(revogado_em) <= momento:
         problemas.append(f"mandato revogado em {revogado_em}")

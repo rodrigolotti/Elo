@@ -191,3 +191,16 @@ def test_oferta_leva_o_nome_do_embarcador_e_o_aceite_usa_quem_recebeu(painel, se
 def sessao_painel(painel):
     from test_api_painel import entrar
     return entrar(painel["cliente"], painel["chave_org"])
+
+
+def test_oferta_lotacao_abaixo_do_piso_vai_para_aprovacao(painel):
+    r = oferta(painel, valor="3000", agente=painel["agente_id"], distancia_km=500, eixos=5)
+    assert r["status"] == "aguardando_aprovacao"
+    assert r["violacoes"][0].startswith("abaixo do piso mínimo da ANTT")
+    assert r["oferta"]["condicoes"]["modalidade"] == "lotacao"
+
+
+def test_fracionada_nao_tem_piso(painel):
+    r = oferta(painel, valor="3000", agente=painel["agente_id"], distancia_km=500, eixos=5,
+               modalidade="fracionada")
+    assert r["status"] == "enviada"

@@ -671,7 +671,9 @@ class Plataforma:
             "referencia": {"pedido_id": pedido_id, "oferta_anterior_hash": None},
             "destinatario_cnpj": pedido["cnpj_solicitante"],
             "carga": pedido["carga"],
-            "condicoes": condicoes.model_dump(mode="json"),
+            # campos opcionais vazios ficam de fora: oferta sem modalidade fica
+            # igual ao formato de antes
+            "condicoes": condicoes.model_dump(mode="json", exclude_none=True),
             "emitida_em": agora.isoformat(timespec="seconds"),
             "valida_ate": valida_ate,
         }

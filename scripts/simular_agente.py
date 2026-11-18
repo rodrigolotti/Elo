@@ -147,7 +147,8 @@ def emitir_oferta(cliente: Any, *, cnpj: str, mandato: str, valor: str,
                   embarcador: str | None = None, embarcador_nome: str | None = None,
                   origem: str = "SP",
                   destino: str = "PR", tipo: str = "carga-geral", peso_kg: int = 3200,
-                  volume_litros: int = 14500) -> dict[str, Any]:
+                  volume_litros: int = 14500, modalidade: str | None = "lotacao",
+                  distancia_km: int | None = None, eixos: int | None = 5) -> dict[str, Any]:
     """Registra o pedido do embarcador fictício e emite a oferta assinada pelo agente."""
     if not validar_cnpj(cnpj):
         raise ErroSimulador(f"CNPJ da transportadora inválido: {cnpj}")
@@ -172,7 +173,10 @@ def emitir_oferta(cliente: Any, *, cnpj: str, mandato: str, valor: str,
         "pedido_id": pedido["id"], "agente_id": agente_id, "mandato_id": mandato,
         "condicoes": {"valor_centavos": centavos,
                       "coleta_ate": (date.today() + timedelta(days=2)).isoformat(),
-                      "prazo_entrega_dias_uteis": 2, "inclui": ["pedágio"]},
+                      "prazo_entrega_dias_uteis": 2, "inclui": ["pedágio"],
+                      **{k: v for k, v in (("modalidade", modalidade),
+                                           ("distancia_km", distancia_km),
+                                           ("eixos", eixos)) if v is not None}},
         "valida_ate": (agora + timedelta(days=1)).isoformat(timespec="seconds"),
     }))
     rascunho = preparado["rascunho"]
@@ -242,6 +246,12 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     oferta.add_argument("--destino", default="PR", help="UF de destino")
     oferta.add_argument("--tipo", default="carga-geral", choices=list(TIPOS_CARGA),
                         help="categoria da ANTT (padrão: carga-geral)")
+    oferta.add_argument("--modalidade", default="lotacao", choices=["lotacao", "fracionada"],
+                        help="o piso da ANTT só vale para lotação (padrão: lotacao)")
+    oferta.add_argument("--distancia", type=int, help="distância da ida em km (sem ela, o "
+                        "painel estima pelo CEP)")
+    oferta.add_argument("--eixos", type=int, default=5, choices=[2, 3, 4, 5, 6, 7, 9],
+                        help="eixos carregados do veículo (padrão: 5)")
 
     aceite = comandos.add_parser("aceitar", help="aceita a oferta como o embarcador")
     aceite.add_argument("--oferta", required=True, help="ID da oferta (of_...)")
@@ -274,7 +284,9 @@ def main(argv: list[str] | None = None) -> int:
                                   valor=args.valor, agente=args.agente, pasta=args.pasta,
                                   embarcador=args.embarcador,
                                   embarcador_nome=args.embarcador_nome, origem=args.origem,
-                                  destino=args.destino, tipo=args.tipo)
+                                  destino=args.destino, tipo=args.tipo,
+                                  modalidade=args.modalidade, distancia_km=args.distancia,
+                                  eixos=args.eixos)
                 o = r["oferta"]
                 print(f"Embarcador fictício: {r['embarcador_nome']} ({r['embarcador']}), "
                       f"outra empresa que não a transportadora {formatar_cnpj(args.cnpj)}.")
