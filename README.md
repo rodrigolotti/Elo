@@ -1,5 +1,53 @@
 # Elo — camada de confiança entre agentes logísticos
 
+**O problema:** agentes de IA de empresas diferentes já conseguem negociar frete
+entre si, mas sem identidade verificável, sem um mandato que limite o que podem
+prometer e sem prova do que foi combinado.
+
+**O que o Elo faz:**
+
+- Dá a cada agente um certificado assinado pela empresa e um mandato com limites de valor, rotas, cargas e validade.
+- Confere cada oferta assinada contra o mandato com código determinístico e manda o que sair dele para aprovação humana.
+- Grava tudo num registro encadeado por hashes, que qualquer parte verifica sozinha numa página pública.
+
+```mermaid
+flowchart LR
+    A[Pedido de cotação] --> B[Oferta assinada<br/>pelo agente]
+    B --> C{Verificador<br/>de mandato}
+    C -- dentro do mandato --> E[Aceite do embarcador<br/>com token de uso único]
+    C -- fora do mandato --> D[Aprovação humana<br/>assinada pela empresa]
+    D --> E
+    E --> F[Registro encadeado<br/>por hashes]
+    F --> G[Página pública<br/>de verificação]
+```
+
+![Página pública de verificação mostrando o compromisso válido, com 14 de 14 checagens OK](docs/verificacao.png)
+
+*Página pública de verificação: 14 checagens independentes*
+
+### Rodar em 4 comandos (cmd do Windows)
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install pydantic cryptography pytest fastapi uvicorn httpx
+uvicorn elo.api:app
+```
+
+Depois, num segundo `cmd` na mesma pasta, `.venv\Scripts\activate.bat` e
+`python demo_api.py`: a demo imprime o link da página de verificação.
+
+### Limitações conhecidas
+
+- É um protótipo com dados fictícios, não usado em produção nem validado juridicamente (a assinatura Ed25519 não é ICP-Brasil).
+- O aceite do embarcador é atestado pela plataforma, não assinado por ele.
+- A API não tem autenticação de usuário, e quem controla o banco inteiro pode reescrever a corrente (falta ancoragem externa).
+- O agente ainda não usa IA: as ofertas vêm de um cliente de demonstração. A extração com IA é a Fase 2.
+
+A lista completa está em [Limitações conhecidas (honestas)](#limitações-conhecidas-honestas).
+
+---
+
 Núcleo da V1 (Fase 1 do roadmap). Permite que o agente de IA de uma transportadora
 emita ofertas de frete **assinadas**, dentro de um **mandato** definido pela empresa,
 e que o embarcador aceite. Qualquer parte consegue **verificar sozinha** o que foi
