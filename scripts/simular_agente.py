@@ -35,6 +35,7 @@ if str(RAIZ) not in sys.path:
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
+from elo.antt import TIPOS_CARGA  # noqa: E402
 from elo.chaves import ParDeChaves  # noqa: E402
 from elo.cnpj import calcular_digitos, formatar_cnpj, validar_cnpj  # noqa: E402
 from elo.mandato import reais  # noqa: E402
@@ -145,7 +146,7 @@ def emitir_oferta(cliente: Any, *, cnpj: str, mandato: str, valor: str,
                   agente: str | None = None, pasta: Path = PASTA_PADRAO,
                   embarcador: str | None = None, embarcador_nome: str | None = None,
                   origem: str = "SP",
-                  destino: str = "PR", tipo: str = "carga geral", peso_kg: int = 3200,
+                  destino: str = "PR", tipo: str = "carga-geral", peso_kg: int = 3200,
                   volume_litros: int = 14500) -> dict[str, Any]:
     """Registra o pedido do embarcador fictício e emite a oferta assinada pelo agente."""
     if not validar_cnpj(cnpj):
@@ -239,7 +240,8 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     oferta.add_argument("--embarcador-nome", help="nome do embarcador fictício")
     oferta.add_argument("--origem", default="SP", help="UF de origem")
     oferta.add_argument("--destino", default="PR", help="UF de destino")
-    oferta.add_argument("--tipo", default="carga geral", help="tipo de carga")
+    oferta.add_argument("--tipo", default="carga-geral", choices=list(TIPOS_CARGA),
+                        help="categoria da ANTT (padrão: carga-geral)")
 
     aceite = comandos.add_parser("aceitar", help="aceita a oferta como o embarcador")
     aceite.add_argument("--oferta", required=True, help="ID da oferta (of_...)")

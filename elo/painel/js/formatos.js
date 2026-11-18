@@ -8,6 +8,27 @@ export const UFS = [
   "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
 ];
 
+// Categorias da Tabela A do piso mínimo da ANTT (iguais a elo/antt.py TIPOS_CARGA;
+// um teste confere que as duas listas são idênticas).
+export const TIPOS_CARGA = {
+  "carga-geral": "Carga geral",
+  "granel-solido": "Granel sólido",
+  "granel-liquido": "Granel líquido",
+  frigorificada: "Frigorificada ou aquecida",
+  conteinerizada: "Conteinerizada",
+  neogranel: "Neogranel",
+  "perigosa-granel-solido": "Perigosa (granel sólido)",
+  "perigosa-granel-liquido": "Perigosa (granel líquido)",
+  "perigosa-frigorificada": "Perigosa (frigorificada ou aquecida)",
+  "perigosa-conteinerizada": "Perigosa (conteinerizada)",
+  "perigosa-carga-geral": "Perigosa (carga geral)",
+  "granel-pressurizada": "Carga granel pressurizada",
+};
+
+export function tiposCarga() {
+  return Object.entries(TIPOS_CARGA);
+}
+
 // O Brasil não tem horário de verão desde 2019: Brasília é sempre -03:00.
 export const FUSO_BRASILIA = "-03:00";
 

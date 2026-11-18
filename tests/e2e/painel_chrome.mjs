@@ -317,7 +317,7 @@ async function emitirMandatoPelaTela(p, captura) {
     destino.querySelector("input[value=SP]").checked = true;
     destino.querySelector("input[value=PR]").checked = true;
   })()`);
-  await p.preencher("form textarea", "carga geral");
+  await p.avaliar(`document.querySelector("fieldset.tipos input[value=carga-geral]").checked = true`);
   if (captura) await p.capturar(captura);
   await p.clicar("Emitir mandato");
   await p.aguardarTexto("emitido: até R$ 6.000,00 por frete.");
@@ -510,7 +510,7 @@ async function roteiro() {
   const pedido = await http("POST", "/pedidos", { cnpj_solicitante: CNPJ_EMBARC, canal: "email",
     nome_solicitante: "Comercial Exemplo de Alimentos Ltda (fictícia)",
     carga: { origem_cep: "01000-000", origem_uf: "SP", destino_cep: "80000-000",
-             destino_uf: "PR", peso_kg: 3200, volume_litros: 14500, tipo: "carga geral" } });
+             destino_uf: "PR", peso_kg: 3200, volume_litros: 14500, tipo: "carga-geral" } });
   const aprovar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 900_000);
   const recusar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 750_000);
   const dentro = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 485_000);
@@ -525,7 +525,7 @@ async function roteiro() {
   await p.capturar("fila-aprovacao");
   ok("duas ofertas na fila, com contador no menu");
   for (const trecho of ["Comercial Exemplo de Alimentos Ltda (fictícia)",
-    "Primeiro frete com este embarcador", "carga geral · 3.200 kg · 14,5 m³",
+    "Primeiro frete com este embarcador", "Carga geral · 3.200 kg · 14,5 m³",
     "Peso cubado: 4.350 kg (300 kg/m³), maior que o peso real", "vence em 23 h",
     "R$ 9.000,00 · SP (01000-000) → PR (80000-000)"]) {
     await p.aguardarTexto(trecho);

@@ -15,8 +15,8 @@ import {
   avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
 } from "./ui.js";
 import {
-  FATOR_CUBAGEM_KG_POR_M3, UFS, centavosDeReais, chavePublicaValida, dataBr, emBrasilia,
-  isoDeBrasilia, lista, localDeBrasilia, metrosCubicos, numero, pesoCubadoKg, prazoAte, reais,
+  FATOR_CUBAGEM_KG_POR_M3, TIPOS_CARGA, UFS, centavosDeReais, chavePublicaValida, dataBr, emBrasilia,
+  isoDeBrasilia, localDeBrasilia, metrosCubicos, numero, pesoCubadoKg, prazoAte, reais,
   resumoFrete, rota, soDigitos,
 } from "./formatos.js";
 
@@ -339,10 +339,17 @@ function blocoEmbarcador(embarcador) {
 }
 
 /** "carga geral · 3.200 kg · 14,5 m³" e, embaixo, o peso cubado. */
-function blocoCarga(carga) {
+/** Nome da categoria; texto antigo fora da lista aparece com o aviso. */
+function nomeDoTipo(descricao) {
+  return descricao.na_lista ? descricao.nome
+    : `${descricao.nome} (texto antigo, fora da lista da ANTT)`;
+}
+
+function blocoCarga(carga, tipoCarga) {
   const cubado = pesoCubadoKg(carga.volume_litros);
   return h("div", {},
-    h("div", {}, `${carga.tipo} · ${numero(carga.peso_kg)} kg · ${metrosCubicos(carga.volume_litros)}`),
+    h("div", {}, `${nomeDoTipo(tipoCarga)} · ${numero(carga.peso_kg)} kg · `
+      + metrosCubicos(carga.volume_litros)),
     h("div", { class: "ajuda" }, `Peso cubado: ${numero(cubado)} kg `
       + `(${FATOR_CUBAGEM_KG_POR_M3} kg/m³)`
       + (cubado > carga.peso_kg ? ", maior que o peso real" : "")));
@@ -423,7 +430,7 @@ function cartaoOferta(item, agentes) {
     dados([
       ["Embarcador", blocoEmbarcador(embarcador)],
       ["Rota", rota(oferta.carga)],
-      ["Carga", blocoCarga(oferta.carga)],
+      ["Carga", blocoCarga(oferta.carga, item.tipo_carga)],
       ["Coleta até", dataBr(c.coleta_ate)],
       ["Prazo de entrega", `${c.prazo_entrega_dias_uteis} dias úteis`],
       c.inclui.length ? ["Inclui", c.inclui.join(", ")] : null,
@@ -554,7 +561,7 @@ function cartaoMandato(item) {
       ["Valor máximo", reais(l.valor_max_centavos)],
       ["UFs de origem", l.ufs_origem.join(", ")],
       ["UFs de destino", l.ufs_destino.join(", ")],
-      ["Tipos de carga", l.tipos_carga.join(", ")],
+      ["Tipos de carga", item.tipos_carga.map(nomeDoTipo).join(", ")],
       ["Vale de", emBrasilia(l.valido_de)],
       ["Vale até", emBrasilia(l.valido_ate)],
       item.revogado_em ? ["Revogado em", emBrasilia(item.revogado_em)] : null,
@@ -580,7 +587,9 @@ async function telaMandatos() {
   const valor = h("input", { required: true, inputmode: "decimal", placeholder: "6.000,00" });
   const origem = seletorUfs("UFs de origem");
   const destino = seletorUfs("UFs de destino");
-  const tipos = h("textarea", { required: true, rows: 2, placeholder: "carga geral" });
+  const tipos = h("fieldset", { class: "tipos" }, h("legend", {}, "Tipos de carga (ANTT)"),
+    Object.entries(TIPOS_CARGA).map(([valor, nome]) =>
+      h("label", {}, h("input", { type: "checkbox", value: valor }), nome)));
   const agora = new Date();
   const de = h("input", { type: "datetime-local", required: true, value: localDeBrasilia(agora) });
   const ate = h("input", { type: "datetime-local", required: true,
@@ -594,7 +603,7 @@ async function telaMandatos() {
     campo("Agente", agente),
     campo("Valor máximo por oferta (R$)", valor),
     origem, destino,
-    campo("Tipos de carga", tipos, "Um por linha ou separados por vírgula."),
+    tipos,
     campo("Vale de (horário de Brasília)", de),
     campo("Vale até (horário de Brasília)", ate),
     h("div", { class: "acoes" }, botao));
@@ -607,13 +616,14 @@ async function telaMandatos() {
           valor_max_centavos: centavosDeReais(valor.value),
           ufs_origem: ufsMarcadas(origem),
           ufs_destino: ufsMarcadas(destino),
-          tipos_carga: lista(tipos.value),
+          tipos_carga: [...tipos.querySelectorAll("input:checked")].map((i) => i.value),
           valido_de: isoDeBrasilia(de.value),
           valido_ate: isoDeBrasilia(ate.value),
         };
         if (!limites.ufs_origem.length || !limites.ufs_destino.length) {
           throw new Error("Marque ao menos uma UF de origem e uma de destino.");
         }
+        if (!limites.tipos_carga.length) throw new Error("Marque ao menos um tipo de carga.");
         const mandato = await api.assinarEEnviar({
           rotaRascunho: "/mandatos/rascunho",
           corpo: { cnpj: atual.cnpj, agente_id: agente.value, limites },

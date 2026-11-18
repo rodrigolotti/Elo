@@ -229,3 +229,9 @@ def test_resumo_do_frete(navegador):
     oferta = {"condicoes": {"valor_centavos": 900_000},
               "carga": {"origem_uf": "SP", "destino_uf": "PR"}}
     assert chamar(navegador, "formatos.js", "resumoFrete", oferta) == "Frete de R$ 9.000,00 (SP → PR)"
+
+
+def test_lista_de_tipos_de_carga_do_painel_e_igual_a_do_servidor(navegador):
+    from elo.antt import TIPOS_CARGA
+    js = chamar(navegador, "formatos.js", "tiposCarga")
+    assert [tuple(par) for par in js] == list(TIPOS_CARGA.items())

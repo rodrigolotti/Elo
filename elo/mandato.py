@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .antt import nome_tipo_carga, normalizar_tipo_carga
 from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
+
+
+def _categoria(tipo: str) -> str:
+    # dados antigos em texto livre: compara pela categoria da ANTT quando der
+    return normalizar_tipo_carga(tipo) or tipo
 
 
 def reais(centavos: int) -> str:
@@ -42,7 +48,7 @@ def violacoes(
         problemas.append(f"origem {carga.origem_uf} fora das UFs autorizadas")
     if carga.destino_uf not in limites.ufs_destino:
         problemas.append(f"destino {carga.destino_uf} fora das UFs autorizadas")
-    if carga.tipo not in limites.tipos_carga:
-        problemas.append(f"tipo de carga '{carga.tipo}' não autorizado")
+    if _categoria(carga.tipo) not in {_categoria(t) for t in limites.tipos_carga}:
+        problemas.append(f"tipo de carga '{nome_tipo_carga(carga.tipo)}' não autorizado")
 
     return problemas

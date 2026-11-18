@@ -42,6 +42,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+from .antt import nome_tipo_carga
 from .canonico import hash_sha256
 from .chaves import ParDeChaves
 from .mandato import reais
@@ -571,7 +572,7 @@ def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]
             ("Valor", reais(cond["valor_centavos"])),
             ("Rota", f"{carga['origem_uf']} ({carga['origem_cep']}) → "
                      f"{carga['destino_uf']} ({carga['destino_cep']})"),
-            ("Carga", f"{carga['tipo']}, {_milhares(carga['peso_kg'])} kg, "
+            ("Carga", f"{nome_tipo_carga(carga['tipo'])}, {_milhares(carga['peso_kg'])} kg, "
                       f"{_m3(carga['volume_litros'])}"),
             ("Coleta até", _data_br(cond["coleta_ate"])),
             ("Prazo de entrega", f"{cond['prazo_entrega_dias_uteis']} dias úteis"),

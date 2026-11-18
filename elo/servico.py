@@ -32,6 +32,13 @@ from . import VERSAO_PROTOCOLO
 from .canonico import ErroCanonico, hash_sha256
 from .chaves import ParDeChaves, chave_publica_valida, verificar_assinatura
 from .cnpj import formatar_cnpj, validar_cnpj
+from .antt import TIPOS_CARGA, nome_tipo_carga, normalizar_tipo_carga
+
+
+def _descrever_tipo(tipo: str) -> dict[str, Any]:
+    """Para exibir: nome da categoria da ANTT, ou o texto antigo fora da lista."""
+    return {"tipo": tipo, "nome": nome_tipo_carga(tipo),
+            "na_lista": normalizar_tipo_carga(tipo) is not None}
 from .mandato import violacoes
 from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
 from .registro import Registro
@@ -39,6 +46,15 @@ from .registro import Registro
 
 class ErroElo(Exception):
     """Operação recusada por regra do protocolo."""
+
+
+def _exigir_categoria(tipo: str) -> str:
+    """Categoria da Tabela A da ANTT para o tipo informado, ou erro com a lista."""
+    categoria = normalizar_tipo_carga(tipo)
+    if categoria is None:
+        raise ErroElo(f"tipo de carga fora da lista da ANTT: {tipo!r}. Use um de: "
+                      + ", ".join(TIPOS_CARGA))
+    return categoria
 
 
 class NaoEncontrado(ErroElo):
@@ -450,6 +466,8 @@ class Plataforma:
         agente = self._agente(agente_id)
         if agente["cnpj"] != org["cnpj"]:
             raise ErroElo("o agente não pertence a esta organização")
+        categorias = list(dict.fromkeys(_exigir_categoria(t) for t in limites.tipos_carga))
+        limites = limites.model_copy(update={"tipos_carga": categorias})
         mandato = {
             "tipo": "mandato",
             "versao_protocolo": VERSAO_PROTOCOLO,
@@ -601,6 +619,7 @@ class Plataforma:
         pedido (o CNPJ não é consultado na Receita)."""
         if not validar_cnpj(cnpj_solicitante):
             raise ErroElo(f"CNPJ do solicitante inválido: {cnpj_solicitante}")
+        carga = carga.model_copy(update={"tipo": _exigir_categoria(carga.tipo)})
         pedido = {
             "tipo": "pedido",
             "id": _novo_id("pc"),
@@ -900,6 +919,7 @@ class Plataforma:
         cnpj = self._org(cnpj)["cnpj"]
         return [{"mandato": m,
                  "agente_nome": self.agentes.get(m["agente_id"], {}).get("nome"),
+                 "tipos_carga": [_descrever_tipo(t) for t in m["limites"]["tipos_carga"]],
                  "revogado_em": self.revogacoes.get(m["id"], {}).get("em")}
                 for m in self.mandatos.values() if m["cnpj"] == cnpj]
 
@@ -922,6 +942,7 @@ class Plataforma:
         cnpj = self._org(cnpj)["cnpj"]
         return [{"oferta": o,
                  "embarcador": self._embarcador(cnpj, o),
+                 "tipo_carga": _descrever_tipo(o["carga"]["tipo"]),
                  "status": self.status_oferta[o["id"]],
                  "violacoes": self.violacoes_oferta.get(o["id"], []),
                  "aprovacao": self.aprovacoes.get(o["id"]),

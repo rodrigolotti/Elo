@@ -508,7 +508,7 @@ def test_pagina_mostra_resumo_para_o_embarcador_antes_da_prova(api):
     # a ordem: resumo, depois a prova (15 checagens), depois os detalhes
     assert (texto.index('class="topo') < texto.index('id="checagens"')
             < texto.index("Detalhes do que foi combinado"))
-    assert re.search(r"<th>Carga</th><td[^>]*>carga geral, 3\.200 kg, 14,5 m³</td>", texto)
+    assert re.search(r"<th>Carga</th><td[^>]*>Carga geral, 3\.200 kg, 14,5 m³</td>", texto)
     assert "maria@exemplo.com" not in texto and "Maria Exemplo" not in texto
 
 

@@ -19,6 +19,8 @@ uma TabelaPiso nova em TABELAS (a mais recente por último).
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -181,3 +183,26 @@ def piso_centavos(tipo: str, eixos: int, distancia_km: int,
     if ccd is None or cc is None:
         return None
     return (distancia_km * ccd + 50) // 100 + cc
+
+
+def _chave(texto: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", str(texto)).encode("ascii", "ignore").decode()
+    return "-".join(re.findall(r"[a-z0-9]+", sem_acento.lower()))
+
+
+_POR_CHAVE = {**{_chave(nome): slug for slug, nome in TIPOS_CARGA.items()},
+              **{slug: slug for slug in TIPOS_CARGA}}
+
+
+def normalizar_tipo_carga(texto: str) -> str | None:
+    """Categoria da ANTT para um texto ("Carga Geral", "carga-geral", "Granel sólido"...).
+
+    None se não for uma das 12 categorias: é o caso de dados antigos em texto livre.
+    """
+    return _POR_CHAVE.get(_chave(texto))
+
+
+def nome_tipo_carga(tipo: str) -> str:
+    """Nome da categoria para exibir; texto antigo fora da lista volta como veio."""
+    slug = normalizar_tipo_carga(tipo)
+    return TIPOS_CARGA[slug] if slug else tipo

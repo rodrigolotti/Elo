@@ -131,7 +131,11 @@ input:focus, select:focus, textarea:focus, .botao:focus-visible, a:focus-visible
        display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 4px 8px; }
 .ufs legend { font-weight: 600; font-size: .9rem; padding: 0 4px; }
 .ufs label { display: flex; align-items: center; gap: 5px; font-size: .9rem; font-family: var(--mono); }
-.ufs input, .confirmacao input { width: auto; margin: 0; }
+.ufs input, .confirmacao input, .tipos input { width: auto; margin: 0; }
+.tipos { border: 1px solid var(--borda); border-radius: 8px; padding: 10px 12px; margin: 0;
+  min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; }
+.tipos legend { font-weight: 600; font-size: .9rem; padding: 0 4px; }
+.tipos label { display: flex; align-items: center; gap: 6px; font-size: .9rem; }
 .confirmacao { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; }
 .confirmacao input { margin-top: 4px; }
 
