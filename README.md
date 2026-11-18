@@ -1,0 +1,135 @@
+# Elo — camada de confiança entre agentes logísticos
+
+Núcleo da V1 (Fase 1 do roadmap). Permite que o agente de IA de uma transportadora
+emita ofertas de frete **assinadas**, dentro de um **mandato** definido pela empresa,
+e que o embarcador aceite. Qualquer parte consegue **verificar sozinha** o que foi
+combinado. Tudo fica num registro só de inclusão, com hashes encadeados.
+
+> Dados fictícios. Este projeto não usa nenhum dado de empregador ou cliente real.
+
+## Como rodar
+
+Requisitos: Python 3.11+, `pydantic` 2 e `cryptography`. Para a API, `fastapi`,
+`uvicorn` e `httpx`. Para os testes, `pytest`.
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install pydantic cryptography pytest fastapi uvicorn httpx
+python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
+python3 -m pytest -q     # 41 testes (19 do núcleo + 22 da API)
+```
+
+## API no Windows (cmd)
+
+Na pasta do projeto, num Prompt de Comando (`cmd`):
+
+```bat
+:: 1. ambiente virtual e dependências (só na primeira vez)
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install pydantic cryptography pytest fastapi uvicorn httpx
+
+:: 2. testes
+python -m pytest -q
+
+:: 3. sobe a API em http://127.0.0.1:8000 (o banco fica em elo.db)
+uvicorn elo.api:app --reload
+```
+
+Para usar outro arquivo de banco, antes de subir: `set ELO_DB=C:\caminho\outro.db`.
+
+Com a API no ar, abra **um segundo** `cmd` na mesma pasta e rode a demo do cliente:
+
+```bat
+.venv\Scripts\activate.bat
+python demo_api.py
+```
+
+Ela gera as chaves da transportadora e do agente **localmente**, cadastra tudo pela
+API, emite uma oferta dentro do mandato e outra acima do limite (que passa por
+aprovação), aceita as duas e imprime no final os links, por exemplo:
+
+```
+Abra no navegador:
+   http://127.0.0.1:8000/verificar/cp_cb1a583ddaa9
+```
+
+Abra esse link no navegador (ou rode `start http://127.0.0.1:8000/verificar/<id>`
+no `cmd`). A página mostra as 14 checagens com OK ou FALHA e o resultado final.
+A documentação interativa da API fica em http://127.0.0.1:8000/docs.
+Para parar a API, use `Ctrl+C` na janela em que ela está rodando.
+
+### Como a API assina sem receber chave privada
+
+Toda operação que precisa da assinatura de uma empresa tem dois passos:
+
+1. `POST /<recurso>/rascunho`: a plataforma aplica as regras e devolve o objeto
+   **sem assinatura**. O rascunho fica pendente por 10 minutos.
+2. O cliente assina o rascunho do lado dele e envia o objeto assinado em
+   `POST /<recurso>`. A plataforma confere a assinatura contra a chave pública
+   esperada (da organização ou do agente), revalida o estado e grava no registro.
+   O objeto precisa ser idêntico ao rascunho: alterar qualquer campo antes de
+   assinar é recusado, e o mesmo objeto assinado não pode ser enviado duas vezes.
+
+| Rota | O que faz | Quem assina |
+| --- | --- | --- |
+| `POST /organizacoes/rascunho` → `POST /organizacoes` | Cadastra a organização | a própria organização |
+| `POST /agentes/rascunho` → `POST /agentes` | Emite o certificado do agente | organização |
+| `POST /mandatos/rascunho` → `POST /mandatos` | Emite o mandato | organização |
+| `POST /pedidos` | Registra o pedido de cotação | ninguém |
+| `POST /ofertas/rascunho` → `POST /ofertas` | Emite a oferta (diz se sai do mandato) | agente |
+| `POST /ofertas/{id}/aprovacao/rascunho` → `POST /ofertas/{id}/aprovacao` | Aprovação humana | organização |
+| `POST /ofertas/{id}/aceite` | Aceite do embarcador por link | plataforma (atesta) |
+| `GET /compromissos/{id}/verificacao` | Relatório em JSON | — |
+| `GET /verificar/{id}` | Página pública de verificação (HTML) | — |
+
+Erros de regra respondem 400, objetos inexistentes 404 e corpo inválido 422.
+
+## O que já funciona
+
+- Cadastro de organização por CNPJ (com dígitos verificadores) e chave Ed25519 própria.
+- Certificado do agente, assinado pela chave da organização.
+- Mandato assinado: valor máximo, UFs de origem e destino, tipos de carga e validade. Pode ser revogado.
+- Oferta assinada pelo agente. Se ela sair do mandato, fica aguardando aprovação humana.
+- Aprovação humana assinada com a chave da organização.
+- Aceite do embarcador por link, atestado pela plataforma. Só o destinatário pode aceitar, só dentro da validade e uma vez só.
+- Registro SQLite só de inclusão: os gatilhos recusam UPDATE e DELETE, e a corrente de hashes denuncia adulteração direta no arquivo.
+- Relatório de verificação com 14 checagens independentes, refeitas a partir do registro.
+
+## Estrutura
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| `elo/canonico.py` | JSON canônico (subconjunto da RFC 8785) e SHA-256 |
+| `elo/chaves.py` | Geração de chaves, assinatura e verificação Ed25519 |
+| `elo/cnpj.py` | Validação e formatação de CNPJ |
+| `elo/modelos.py` | Formatos validados: carga, condições, limites do mandato |
+| `elo/mandato.py` | Regras do mandato (código puro, sem IA) |
+| `elo/registro.py` | Registro de eventos com hashes encadeados |
+| `elo/servico.py` | Fluxo completo e verificação de compromissos |
+| `elo/api.py` | API HTTP e página de verificação (sem regra de negócio) |
+| `demo_api.py` | Cliente de demonstração: gera as chaves localmente e chama a API |
+
+## Decisões de projeto
+
+- **Sem números com casa decimal.** Valores em centavos, peso em kg e volume em litros, sempre inteiros. Isso elimina erro de arredondamento e mantém a canonicalização simples. O canonicalizador recusa `float`.
+- **A plataforma não guarda nem recebe as chaves privadas das empresas.** Ela prepara o rascunho, a empresa assina do lado dela e devolve o objeto assinado. A chave da própria plataforma (usada para atestar aceites) é gerada a cada início da API e fica só na memória; a parte pública vai para o registro, então aceites antigos continuam verificáveis.
+- **O registro é a fonte da verdade.** O estado em memória é reconstruído a partir dele, e a verificação sempre relê o registro.
+- **A regra do mandato é código determinístico.** Quando o agente com IA chegar (Fase 2), ele só vai extrair dados. Um e-mail malicioso não consegue mudar o que o código autoriza.
+
+## Limitações conhecidas (honestas)
+
+- **O aceite por link é atestado pela plataforma, não assinado pelo embarcador.** É mais fraco que uma assinatura própria. A V2 deve oferecer chave ao embarcador ou integração com ICP-Brasil.
+- **Quem controla o banco inteiro pode reescrever a corrente toda.** A defesa é publicar periodicamente o hash mais recente num lugar externo (ancoragem). Ainda não está implementado.
+- **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores.
+- **Validade jurídica:** a assinatura Ed25519 própria não é certificado ICP-Brasil. Antes de um piloto real, valide com um advogado.
+- **Desempenho:** a verificação relê o registro inteiro. Isso basta para a V1, mas exige índices e snapshots em escala.
+- **A API não tem autenticação.** Quem conhece um id de oferta pode registrar o aceite, desde que informe o CNPJ do destinatário. O link de aceite precisa de um token secreto antes de um piloto.
+- **Rascunhos pendentes ficam na memória.** Se a API reiniciar, o rascunho que ainda não foi assinado se perde e é preciso preparar de novo.
+- **A API atende uma requisição por vez** (uma trava em volta da plataforma). Basta para a V1.
+
+## Próximos passos
+
+1. Autenticação na API e token secreto no link de aceite.
+2. Ancoragem periódica do hash do registro.
+3. Fase 2: extrator com IA (só extração, saída estruturada) e motor de preço por tabela.
