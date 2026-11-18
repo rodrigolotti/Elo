@@ -8,7 +8,7 @@ prova do que foi combinado.
 **O que o Elo faz:**
 
 - Dá a cada agente um certificado assinado pela empresa e um mandato com limites de valor, rotas, cargas e validade.
-- Confere cada oferta assinada contra o mandato com código determinístico e manda o que sair dele para uma pessoa da empresa aprovar ou recusar, com assinatura.
+- Confere cada oferta assinada contra o mandato com código determinístico e manda o que sair dele para uma pessoa da empresa aprovar ou recusar, com assinatura. Isso inclui frete de carga lotação abaixo do piso mínimo da ANTT.
 - Grava tudo num registro encadeado por hashes, que qualquer parte verifica sozinha numa página pública.
 - Dá à transportadora um painel web em que a chave da organização é gerada e usada só no navegador, com recuperação por arquivo cifrado e frase-senha.
 
@@ -50,6 +50,7 @@ num segundo `cmd` na mesma pasta, `.venv\Scripts\activate.bat` e
 - Quem controla o banco inteiro pode reescrever a corrente (falta ancoragem externa).
 - Quem tiver o arquivo de recuperação e a frase-senha toma a organização na hora: ainda não há prazo de espera para a chave antiga cancelar.
 - Ainda não está pronto para a internet: `POST /pedidos` e os rascunhos não exigem autenticação.
+- O piso da ANTT cobre só a Tabela A (carga lotação). Quando o agente não informa a distância, ela é estimada pelo CEP, e os CEPs vão para o ViaCEP, um serviço externo.
 - O agente ainda não usa IA: as ofertas vêm de um cliente de demonstração. A extração com IA é a Fase 2.
 
 A lista completa está em [Limitações conhecidas (honestas)](#limitações-conhecidas-honestas).
@@ -73,7 +74,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 247 testes (os de JavaScript precisam de Node; sem ele, são pulados)
+python3 -m pytest -q     # 366 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -281,12 +282,72 @@ python scripts\simular_agente.py aceitar --oferta of_... --token ...
 - O aceite imprime o link da página `/verificar` e o compromisso aparece em **Histórico**.
 - A chave privada do agente fica em `chaves_locais\agente.json`, pasta que o git
   ignora. Para trocar de agente, `chave --substituir`.
+- Piso da ANTT: a oferta vai como carga lotação com 5 eixos (`--modalidade`, `--eixos`).
+  Com `--distancia 500`, o piso usa a distância do agente e uma oferta abaixo dele vai
+  para Aprovações. Sem `--distancia`, o painel estima pelo CEP.
 - Outras opções: `--url` (padrão `http://127.0.0.1:8000`), `--embarcador`,
-  `--origem`, `--destino` e `--tipo`. Veja `python scripts\simular_agente.py oferta --help`.
+  `--origem`, `--destino` e `--tipo` (categoria da ANTT). Veja
+  `python scripts\simular_agente.py oferta --help`.
 - O embarcador é fictício e **nunca é a própria transportadora**: o simulador usa
   "Comercial Exemplo de Alimentos Ltda" (`22.333.444/0001-81`) ou, se esse for o CNPJ
   da transportadora, "Distribuidora Exemplo S.A." (`33.444.555/0001-81`), e mostra
   qual usou. O `aceitar` usa automaticamente o embarcador que recebeu a oferta.
+
+## Piso mínimo de frete da ANTT
+
+Na fila de aprovação, cada oferta mostra **"Esse frete paga o piso?"**: modalidade e
+eixos, distância, valor por km, o piso da ANTT e a folga. Uma oferta de **carga
+lotação** com valor abaixo do piso vai para aprovação com o aviso **"abaixo do piso
+mínimo da ANTT: risco de multa e indenização"**.
+
+**Fonte.** Tabela A da **Portaria SUROC nº 22, de 28/09/2026**, que reajusta o Anexo II
+da **Resolução ANTT nº 5.867/2020** (D.O.U. de 29/09/2026, Edição Extra 1 A; vigência a
+partir de 30/09/2026; diesel S10 de referência R$ 7,33/L). O texto oficial do
+[ANTTlegis](https://anttlegis.antt.gov.br/action/ActionDatalegis.php?acao=abrirTextoAto&tipo=POR&numeroAto=00000022&seqAto=000&valorAno=2026&orgao=SUROC%2FANTT%2FMT&cod_modulo=623&cod_menu=9230)
+está guardado em `docs/fontes/antt/`. Um teste confere o SHA-256 desse arquivo e
+exige que a tabela de `elo/antt.py` seja exatamente a que `scripts/extrair_tabela_antt.py`
+tira dele.
+
+**A quem se aplica.** O título da Tabela A é "transporte rodoviário de carga
+lotação em operações em que haja a contratação da composição veicular ou caminhão
+simples". Por isso a oferta tem o campo **modalidade** (`lotacao` ou `fracionada`),
+e o piso só vale para lotação. As 12 categorias de carga da Tabela A viraram a lista
+de tipos de carga do pedido e do mandato.
+
+**O que o agente assina.** `modalidade`, `distancia_km` (ida, em km inteiros) e
+`eixos` (2, 3, 4, 5, 6, 7 ou 9) entram nas condições da oferta assinada. A regra do
+mandato e a verificação usam **só** esses dados assinados e a tabela vigente na data
+de emissão da oferta, então um reajuste da ANTT não muda compromissos antigos.
+
+**A conta.** `piso = distância × CCD + CC`, em inteiros: CCD em décimos de milésimo
+de real por km, CC e o piso em centavos, arredondados meio para cima.
+
+**Distância estimada pelo CEP.** Quando o agente não informa a distância, o painel
+mostra uma estimativa, sempre marcada **"estimada"**. Ela **nunca** entra na regra
+nem na verificação. **Os CEPs de origem e destino da carga são enviados ao
+[ViaCEP](https://viacep.com.br)**, um serviço externo, para descobrir o município.
+Há timeout de 3 s e cache em memória, e as falhas ficam em cache por 5 minutos. As
+coordenadas das sedes municipais vêm da Base de Localidades 2022 do IBGE
+(`elo/dados/`, gerado por `scripts/extrair_sedes_ibge.py`). A distância é a linha
+reta × 1,25. Para não consultar o ViaCEP, suba a API com `ELO_ESTIMATIVA_CEP=desligada`.
+
+**Comparação com o [esse-frete-paga](https://github.com/rodrigolotti/esse-frete-paga).**
+`tests/test_antt.py` confere que as 5 categorias do esse-frete-paga têm os mesmos
+coeficientes da tabela oficial. Também compara 350 pisos (5 categorias × 7 eixos × 10
+distâncias): 349 são iguais e 1 difere em um centavo. É o caso granel sólido, 3
+eixos, 10 km, em que a conta exata dá 604,795: o Elo arredonda para R$ 604,80 e o
+esse-frete-paga, em `float`, para R$ 604,79. Para rodar a comparação contra uma
+cópia local do projeto:
+
+```bat
+set ESSE_FRETE_PAGA=C:\caminho\para\esse-frete-paga
+python -m pytest -q tests\test_antt.py
+```
+
+**Quando a ANTT reajustar.** Baixe o texto oficial para `docs/fontes/antt/` e confira com
+`python scripts\extrair_tabela_antt.py <arquivo>`. Depois acrescente uma
+`TabelaPiso` nova em `elo/antt.py`, com norma, publicação, vigência, URL e SHA-256. A
+tabela antiga continua valendo para ofertas emitidas antes.
 
 ### Verificação num Chrome de verdade
 
@@ -374,6 +435,8 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - Login no painel por desafio assinado com a chave da organização. As consultas exigem sessão e mostram só os dados da própria organização.
 - Painel web da transportadora em `/painel`: cadastro, agentes, mandatos com revogação, fila de aprovação e histórico, com a chave da organização só no navegador.
 - Chave de recuperação em arquivo cifrado (PBKDF2-HMAC-SHA256 com 600.000 iterações + AES-256-GCM) e troca da chave principal registrada no protocolo, com histórico de chaves verificado na 15ª checagem.
+- Piso mínimo da ANTT (Tabela A, carga lotação) com a tabela oficial versionada por vigência. Oferta de lotação abaixo do piso vai para aprovação com aviso forte. A fila mostra distância (do agente ou estimada pelo CEP), valor por km, piso e folga.
+- Tipos de carga do pedido e do mandato na lista das 12 categorias da ANTT. Os dados antigos em texto livre continuam valendo.
 
 ## Estrutura
 
@@ -400,6 +463,12 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 | `tests/e2e/painel_chrome.mjs` | Percorre o painel num Chrome headless |
 | `scripts/captura_verificacao.mjs` | Gera `docs/verificacao.png` com dados fictícios |
 | `scripts/simular_agente.py` | Simula agente e embarcador pela API, para testar o painel |
+| `elo/antt.py` | Tabela A do piso mínimo da ANTT (oficial, por vigência) e a conta do piso |
+| `elo/distancia.py` | Distância estimada pelo CEP (ViaCEP + sedes municipais do IBGE) |
+| `elo/dados/sedes_municipais_ibge_2022.csv` | Coordenadas das sedes dos 5.570 municípios (IBGE) |
+| `docs/fontes/antt/` | Texto oficial da portaria da ANTT usada na tabela |
+| `scripts/extrair_tabela_antt.py`, `scripts/extrair_sedes_ibge.py` | Refazem a tabela da ANTT e a base do IBGE a partir das fontes oficiais |
+| `scripts/pisos_esse_frete_paga.mjs` | Calcula pisos com o código do esse-frete-paga, para comparar |
 | `demo_api.py` | Cliente de demonstração: gera as chaves localmente e chama a API |
 
 ## Decisões de projeto
@@ -419,6 +488,10 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - **Quem controla o banco inteiro pode reescrever a corrente toda.** A defesa é publicar periodicamente o hash mais recente num lugar externo (ancoragem). Ainda não está implementado.
 - **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores. O nome do embarcador mostrado no painel é o informado no pedido, sem conferência.
 - **Peso cubado com fator fixo de 300 kg/m³**, a praxe do rodoviário. Contratos com outro fator ainda não são considerados.
+- **Piso da ANTT só da Tabela A** (carga lotação com contratação da composição veicular ou do caminhão simples). As Tabelas B (só a unidade de tração), C e D (alto desempenho) e a carga fracionada não são cobertas. Ofertas sem modalidade, distância ou eixos não passam pela regra do piso, e ofertas emitidas antes de 30/09/2026 também não, porque não há tabela anterior guardada.
+- **O piso é o mínimo legal, não o custo da transportadora.** "Acima do piso" não quer dizer que o frete dá lucro.
+- **A tabela da ANTT é atualizada à mão** a cada reajuste. Até a nova tabela entrar no código, vale a anterior.
+- **A distância estimada é aproximada** (linha reta entre as sedes municipais × 1,25) e depende do ViaCEP, que recebe os CEPs de origem e destino. Ela nunca entra na regra do mandato.
 - **Validade jurídica:** a assinatura Ed25519 própria não é certificado ICP-Brasil. Antes de um piloto real, valide com um advogado.
 - **Desempenho:** a verificação relê o registro inteiro. Isso basta para a V1, mas exige índices e snapshots em escala.
 - **As consultas exigem sessão, mas as rotas de escrita não.** O que importa é protegido por assinatura (organização e agente) ou pelo token de aceite, mas qualquer um consegue, por exemplo, registrar pedidos ou pedir rascunhos. Os desafios de login têm teto de 5 pendentes por organização: passou disso, o mais antigo é descartado.
@@ -440,4 +513,5 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 2. Página HTML de aceite para o embarcador.
 3. Ancoragem periódica do hash do registro.
 4. Proteção de `POST /pedidos` e dos rascunhos antes de ir para a internet.
-5. Fase 2: extrator com IA (só extração, saída estruturada) e motor de preço por tabela.
+5. Tabelas B, C e D da ANTT e o custo próprio por km da transportadora, para mostrar a margem real.
+6. Fase 2: extrator com IA (só extração, saída estruturada) e motor de preço por tabela.
