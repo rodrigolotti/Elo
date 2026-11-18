@@ -33,7 +33,7 @@ git clone https://github.com/rodrigolotti/Elo.git
 cd Elo
 python -m venv .venv
 .venv\Scripts\activate.bat
-pip install pydantic cryptography pytest fastapi uvicorn httpx2
+pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 uvicorn elo.api:app
 ```
 
@@ -61,13 +61,13 @@ combinado. Tudo fica num registro só de inclusão, com hashes encadeados.
 ## Como rodar
 
 Requisitos: Python 3.11+, `pydantic` 2 e `cryptography`. Para a API, `fastapi`,
-`uvicorn` e `httpx2`. Para os testes, `pytest`.
+`uvicorn`, `httpx2` e `tzdata` (fusos horários da página de verificação). Para os testes, `pytest`.
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install pydantic cryptography pytest fastapi uvicorn httpx2
+pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 56 testes (20 do núcleo + 36 da API)
+python3 -m pytest -q     # 57 testes (20 do núcleo + 37 da API)
 ```
 
 ## API no Windows (cmd)
@@ -78,7 +78,7 @@ Na pasta do projeto, num Prompt de Comando (`cmd`):
 :: 1. ambiente virtual e dependências (só na primeira vez)
 python -m venv .venv
 .venv\Scripts\activate.bat
-pip install pydantic cryptography pytest fastapi uvicorn httpx2
+pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 
 :: 2. testes
 python -m pytest -q

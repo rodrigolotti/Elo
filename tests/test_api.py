@@ -1,6 +1,7 @@
 """Testes da API HTTP com TestClient. As chaves ficam sempre do lado do teste (cliente)."""
 
 import re
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -400,6 +401,28 @@ def test_pagina_de_compromisso_inexistente(cliente):
     assert len(status_na_pagina(r.text)) == 14
     assert status_na_pagina(r.text)[0] == "OK"  # o registro em si está íntegro
     assert cliente.get("/compromissos/cp_naoexiste/verificacao").status_code == 404
+
+
+def test_pagina_mostra_datas_em_brasilia_sem_mudar_o_gravado(api, relogio):
+    # servidor em UTC: o aceite é gravado em +00:00; a validade veio em -03:00
+    relogio.agora = datetime(2026, 11, 18, 0, 48, 30, tzinfo=timezone.utc)
+    _, emitida = emitir(api)
+    cp_id = aceitar(api, emitida["oferta"]["id"]).json()["id"]
+    texto = api["cliente"].get(f"/verificar/{cp_id}").text
+
+    aceite = "17/11/2026 às 21:48 (horário de Brasília)"
+    validade = "18/11/2026 às 18:00 (horário de Brasília)"
+    assert re.search(rf"<th>Aceite em</th><td[^>]*>{re.escape(aceite)}</td>", texto)
+    assert f"aceite {aceite}, validade {validade}" in texto
+    assert re.search(r"<th>Coleta até</th><td[^>]*>20/11/2026</td>", texto)
+    assert not re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", texto)  # nenhuma data ISO na página
+
+    # o que fica gravado (e assinado) não muda: ISO 8601, no fuso original
+    rel = api["cliente"].get(f"/compromissos/{cp_id}/verificacao").json()
+    assert all(v["ok"] for v in rel["verificacoes"])
+    detalhe = next(v["detalhe"] for v in rel["verificacoes"]
+                   if v["nome"] == "Aceite dentro da validade da oferta")
+    assert detalhe == f"aceite 2026-11-18T00:48:30+00:00, validade {VALIDADE}"
 
 
 def test_pagina_escapa_html(api):

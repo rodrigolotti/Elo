@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import html
 import os
+import re
 import threading
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
+from zoneinfo import ZoneInfo
 
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -31,7 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .canonico import hash_sha256
 from .chaves import ParDeChaves
 from .mandato import reais
-from .modelos import Carga, Condicoes, LimitesMandato
+from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
 from .registro import Registro
 from .servico import ErroElo, NaoEncontrado, Plataforma, Relatorio
 
@@ -282,6 +284,32 @@ def _relatorio_json(relatorio: Relatorio) -> dict[str, Any]:
     }
 
 
+_BRASILIA = ZoneInfo("America/Sao_Paulo")
+# data e hora ISO 8601 com fuso, como gravadas no registro (ex.: 2026-11-18T00:48:00+00:00)
+_MOMENTO_ISO = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})")
+
+
+def _em_brasilia(momento_iso: str) -> str:
+    """Só para exibir: '17/11/2026 às 21:48 (horário de Brasília)'.
+
+    O valor gravado e assinado continua em ISO 8601, no fuso em que foi emitido.
+    """
+    momento = ler_momento(momento_iso).astimezone(_BRASILIA)
+    return f"{momento:%d/%m/%Y} às {momento:%H:%M} (horário de Brasília)"
+
+
+def _datas_em_brasilia(texto: str) -> str:
+    """Troca, num texto de exibição, cada data e hora ISO pela forma de Brasília."""
+    return _MOMENTO_ISO.sub(lambda m: _em_brasilia(m.group()), texto)
+
+
+def _data_br(data_iso: str) -> str:
+    """Data sem hora (ex.: coleta_ate): '20/11/2026'. Sem hora, não há fuso a converter."""
+    ano, mes, dia = data_iso.split("-")
+    return f"{dia}/{mes}/{ano}"
+
+
 def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]]:
     """Dados do acordo para a página. Só leitura do estado; sem regra de negócio.
 
@@ -290,7 +318,7 @@ def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]
     cp = plataforma.compromissos.get(compromisso_id)
     if cp is None:
         return []
-    linhas = [("Aceite em", cp["aceite"]["em"]), ("Embarcador", cp["aceite"]["cnpj"])]
+    linhas = [("Aceite em", _em_brasilia(cp["aceite"]["em"])), ("Embarcador", cp["aceite"]["cnpj"])]
     oferta_id = plataforma.ofertas_por_hash.get(cp["oferta_hash"])
     oferta = plataforma.ofertas.get(oferta_id) if oferta_id else None
     if oferta is not None:
@@ -306,7 +334,7 @@ def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]
                      f"{carga['destino_uf']} ({carga['destino_cep']})"),
             ("Carga", f"{carga['tipo']}, {carga['peso_kg']} kg, "
                       f"{carga['volume_litros']} L"),
-            ("Coleta até", cond["coleta_ate"]),
+            ("Coleta até", _data_br(cond["coleta_ate"])),
             ("Prazo de entrega", f"{cond['prazo_entrega_dias_uteis']} dias úteis"),
         ]
     linhas.append(("Hash da oferta", cp["oferta_hash"]))
@@ -344,7 +372,8 @@ def _pagina(relatorio: Relatorio, resumo: list[tuple[str, str]]) -> str:
     valido = relatorio.valido
     linhas = "".join(
         f'<tr><td class="n">{i}</td><td>{e(v.nome)}'
-        + (f'<div class="det">{e(v.detalhe)}</div>' if v.detalhe else "")
+        + (f'<div class="det">{e(_datas_em_brasilia(v.detalhe))}</div>'
+           if v.detalhe else "")
         + f'</td><td class="st {"ok" if v.ok else "falha"}">'
           f'{"OK" if v.ok else "FALHA"}</td></tr>'
         for i, v in enumerate(relatorio.verificacoes, 1)
