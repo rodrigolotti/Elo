@@ -250,3 +250,32 @@ def test_api_recusa_surrogate_solto_com_400(cliente):
     r = cliente.post("/mandatos", content=corpo, headers={"content-type": "application/json"})
     assert r.status_code == 400
     assert "surrogate" in r.json()["detail"]
+
+
+def test_login_e_recusa_assinados_no_navegador(cliente, navegador, org_js):
+    desafio = cliente.post("/sessoes/desafio", json={"cnpj": CNPJ_TRANSP}).json()["desafio"]
+    assinado = navegador("assinar", nome="org", objeto=desafio)["assinado"]
+    r = cliente.post("/sessoes", json=assinado)
+    assert r.status_code == 201, r.text
+    sessao = {"Authorization": f"Bearer {r.json()['token']}"}
+
+    r = enviar(cliente, navegador, "agente", "/ofertas/rascunho", {
+        "pedido_id": org_js["pedido_id"], "agente_id": org_js["agente_id"],
+        "mandato_id": org_js["mandato_id"], "condicoes": cond(900_000),
+        "valida_ate": VALIDADE}, "/ofertas")
+    oferta_id = r.json()["oferta"]["id"]
+    [pendente] = cliente.get("/ofertas", params={"status": "aguardando_aprovacao"},
+                             headers=sessao).json()
+    assert pendente["oferta"]["id"] == oferta_id
+
+    r = enviar(cliente, navegador, "org", f"/ofertas/{oferta_id}/recusa/rascunho",
+               {"recusado_por": "Ana Gestora", "motivo": "acima da tabela — revisar"},
+               f"/ofertas/{oferta_id}/recusa")
+    assert r.status_code == 201, r.text
+    assert cliente.get("/ofertas", headers=sessao).json()[0]["status"] == "recusada"
+
+
+def test_agente_nao_entra_no_painel_pelo_navegador(cliente, navegador, org_js):
+    desafio = cliente.post("/sessoes/desafio", json={"cnpj": CNPJ_TRANSP}).json()["desafio"]
+    assinado = navegador("assinar", nome="agente", objeto=desafio)["assinado"]
+    assert cliente.post("/sessoes", json=assinado).status_code == 401

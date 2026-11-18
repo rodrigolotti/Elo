@@ -154,7 +154,9 @@ class Plataforma:
         self.ofertas: dict[str, dict[str, Any]] = {}
         self.ofertas_por_hash: dict[str, str] = {}
         self.status_oferta: dict[str, str] = {}
+        self.violacoes_oferta: dict[str, list[str]] = {}
         self.aprovacoes: dict[str, dict[str, Any]] = {}
+        self.recusas: dict[str, dict[str, Any]] = {}
         self.compromissos: dict[str, dict[str, Any]] = {}
         self.token_aceite_hash: dict[str, str | None] = {}
         # o mandato já estava revogado quando a oferta entrou no registro?
@@ -182,6 +184,7 @@ class Plataforma:
             self.ofertas[oferta["id"]] = oferta
             self.ofertas_por_hash[hash_sha256(oferta)] = oferta["id"]
             self.status_oferta[oferta["id"]] = p["status"]
+            self.violacoes_oferta[oferta["id"]] = list(p.get("violacoes", []))
             self.revogado_na_emissao[oferta["id"]] = oferta.get("mandato_id") in self.revogacoes
             self.token_aceite_hash[oferta["id"]] = p.get("token_aceite_hash")
         elif tipo == "oferta_aprovada":
@@ -189,7 +192,14 @@ class Plataforma:
             oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
             if oferta_id is not None:
                 self.aprovacoes[oferta_id] = p
-                self.status_oferta[oferta_id] = "enviada"
+                # uma aprovação gravada depois de uma recusa não reabre a oferta
+                if oferta_id not in self.recusas:
+                    self.status_oferta[oferta_id] = "enviada"
+        elif tipo == "oferta_recusada":
+            oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
+            if oferta_id is not None:
+                self.recusas[oferta_id] = p
+                self.status_oferta[oferta_id] = "recusada"
         elif tipo == "compromisso_firmado":
             self.compromissos[p["id"]] = p
             oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
@@ -481,6 +491,35 @@ class Plataforma:
         rascunho = self.preparar_aprovacao(oferta_id, aprovado_por)
         return self.registrar_assinado(chave_org.assinar(rascunho), "aprovacao")
 
+    def preparar_recusa(self, oferta_id: str, recusado_por: str,
+                        motivo: str = "") -> dict[str, Any]:
+        """A organização recusa uma oferta que aguardava aprovação. É definitivo."""
+        oferta = self._oferta(oferta_id)
+        org = self._org(oferta["emissor"]["cnpj"])
+
+        def revalidar() -> None:
+            if self.status_oferta[oferta_id] != "aguardando_aprovacao":
+                raise ErroElo(f"oferta não está aguardando aprovação "
+                              f"({self.status_oferta[oferta_id]})")
+
+        revalidar()
+        recusa = {
+            "tipo": "recusa",
+            "oferta_hash": hash_sha256(oferta),
+            "recusado_por": recusado_por,
+            "motivo": motivo,
+            "em": self._agora_iso(),
+        }
+        return self._guardar_rascunho("recusa", "oferta_recusada", recusa,
+                                      oferta_id, org["chave_publica"], revalidar)
+
+    def recusar_oferta(self, oferta_id: str, chave_org: ParDeChaves,
+                       recusado_por: str, motivo: str = "") -> dict[str, Any]:
+        oferta = self._oferta(oferta_id)
+        self._exigir_chave_da_org(self._org(oferta["emissor"]["cnpj"]), chave_org)
+        rascunho = self.preparar_recusa(oferta_id, recusado_por, motivo)
+        return self.registrar_assinado(chave_org.assinar(rascunho), "recusa")
+
     # ---------- aceite do embarcador (via link) ----------
 
     def aceitar_oferta(self, oferta_id: str, cnpj_embarcador: str, nome: str,
@@ -587,7 +626,12 @@ class Plataforma:
                 if self.revogado_na_emissao.get(oferta_id) else None,
             )
             aprovacao = self.aprovacoes.get(oferta_id)
-            if not problemas:
+            recusa = self.recusas.get(oferta_id)
+            if recusa is not None and verificar_assinatura(recusa, org["chave_publica"]):
+                r.checar("Oferta autorizada", False,
+                         f"oferta recusada pela organização em {recusa['em']} "
+                         f"por {recusa['recusado_por']}")
+            elif not problemas:
                 r.checar("Oferta autorizada", True, "dentro do mandato")
             elif aprovacao is not None:
                 aprov_ok = (verificar_assinatura(aprovacao, org["chave_publica"])
@@ -606,6 +650,40 @@ class Plataforma:
         r.checar("Aceite dentro da validade da oferta",
                  ler_momento(cp["aceite"]["em"]) <= ler_momento(oferta["valida_ate"]),
                  f"aceite {cp['aceite']['em']}, validade {oferta['valida_ate']}")
+
+    # ---------- consultas do painel (só leitura, sempre de uma organização) ----------
+
+    def listar_agentes(self, cnpj: str) -> list[dict[str, Any]]:
+        cnpj = self._org(cnpj)["cnpj"]
+        return [a for a in self.agentes.values() if a["cnpj"] == cnpj]
+
+    def listar_mandatos(self, cnpj: str) -> list[dict[str, Any]]:
+        cnpj = self._org(cnpj)["cnpj"]
+        return [{"mandato": m,
+                 "agente_nome": self.agentes.get(m["agente_id"], {}).get("nome"),
+                 "revogado_em": self.revogacoes.get(m["id"], {}).get("em")}
+                for m in self.mandatos.values() if m["cnpj"] == cnpj]
+
+    def listar_ofertas(self, cnpj: str, status: str | None = None) -> list[dict[str, Any]]:
+        cnpj = self._org(cnpj)["cnpj"]
+        return [{"oferta": o,
+                 "status": self.status_oferta[o["id"]],
+                 "violacoes": self.violacoes_oferta.get(o["id"], []),
+                 "aprovacao": self.aprovacoes.get(o["id"]),
+                 "recusa": self.recusas.get(o["id"])}
+                for o in self.ofertas.values()
+                if o["emissor"]["cnpj"] == cnpj
+                and (status is None or self.status_oferta[o["id"]] == status)]
+
+    def listar_compromissos(self, cnpj: str) -> list[dict[str, Any]]:
+        cnpj = self._org(cnpj)["cnpj"]
+        saida = []
+        for cp in self.compromissos.values():
+            oferta = self.ofertas.get(self.ofertas_por_hash.get(cp["oferta_hash"], ""))
+            if oferta is not None and oferta["emissor"]["cnpj"] == cnpj:
+                saida.append({"compromisso": cp, "oferta": oferta,
+                              "verificacao": f"/verificar/{cp['id']}"})
+        return saida
 
     # ---------- auxiliares ----------
 

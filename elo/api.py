@@ -11,6 +11,11 @@ empresa segue dois passos:
     (o cliente assina localmente com a própria chave)
     POST /<recurso>            -> o cliente envia o objeto assinado
 
+Consultas (listas de agentes, mandatos, ofertas e compromissos) exigem sessão:
+o cliente pede um desafio, assina com a chave da organização e recebe um
+token (cabeçalho "Authorization: Bearer <token>"). Cada sessão só enxerga os
+dados da própria organização. Fora isso, só a verificação é pública.
+
 Subir:  uvicorn elo.api:app --reload
 Banco:  variável ELO_DB (padrão: elo.db na pasta atual).
 """
@@ -23,11 +28,12 @@ import re
 import threading
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Annotated, Any, AsyncIterator, Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import Body, FastAPI, Request
+from fastapi import Body, Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
 from .canonico import hash_sha256
@@ -36,6 +42,7 @@ from .mandato import reais
 from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
 from .registro import Registro
 from .servico import ErroElo, NaoEncontrado, Plataforma, Relatorio
+from .sessoes import NaoAutenticado, Sessoes
 
 # ---------- corpos das requisições ----------
 
@@ -83,12 +90,46 @@ class PrepararAprovacao(_Corpo):
     aprovado_por: str = Field(min_length=1, max_length=200)
 
 
+class PrepararRecusa(_Corpo):
+    recusado_por: str = Field(min_length=1, max_length=200)
+    motivo: str = Field(default="", max_length=1000)
+
+
+class PedirDesafio(_Corpo):
+    cnpj: str
+
+
+StatusOferta = Literal["aguardando_aprovacao", "enviada", "aceita", "recusada"]
+
+
 class Aceite(_Corpo):
     token: str = Field(min_length=1, max_length=200,
                        description="Token de aceite devolvido uma única vez em POST /ofertas")
     cnpj: str = Field(description="CNPJ do embarcador destinatário da oferta")
     nome: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=200)
+
+
+# ---------- sessão ----------
+
+_portador = HTTPBearer(auto_error=False)
+
+
+def _token(credenciais: Annotated[HTTPAuthorizationCredentials | None,
+                                  Depends(_portador)]) -> str | None:
+    return credenciais.credentials if credenciais else None
+
+
+Token = Annotated[str | None, Depends(_token)]
+
+
+def _cnpj_logado(request: Request, token: Token) -> str:
+    """CNPJ da sessão; 401 sem token válido."""
+    with request.app.state.trava:
+        return request.app.state.sessoes.cnpj_da_sessao(token)
+
+
+Logado = Annotated[str, Depends(_cnpj_logado)]
 
 
 ObjetoAssinado = Body(description="O rascunho devolvido pela plataforma, com o campo "
@@ -127,9 +168,10 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
         lifespan=ciclo_de_vida,
     )
     app.state.plataforma = plataforma
+    sessoes = app.state.sessoes = Sessoes(lambda: app.state.plataforma)
     # a Plataforma mantém estado em memória e uma conexão SQLite: uma
     # requisição por vez
-    trava = threading.Lock()
+    trava = app.state.trava = threading.Lock()
 
     @app.exception_handler(NaoEncontrado)
     async def _nao_encontrado(_: Request, erro: NaoEncontrado) -> JSONResponse:
@@ -139,8 +181,60 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
     async def _erro_elo(_: Request, erro: ErroElo) -> JSONResponse:
         return JSONResponse({"detail": str(erro)}, status_code=400)
 
+    @app.exception_handler(NaoAutenticado)
+    async def _nao_autenticado(_: Request, erro: NaoAutenticado) -> JSONResponse:
+        return JSONResponse({"detail": str(erro)}, status_code=401,
+                            headers={"WWW-Authenticate": "Bearer"})
+
     def plat() -> Plataforma:
         return app.state.plataforma
+
+    # ----- sessão do painel -----
+
+    @app.post("/sessoes/desafio", tags=["sessão"])
+    def pedir_desafio(corpo: PedirDesafio) -> dict[str, Any]:
+        """Desafio para assinar com a chave da organização. Vale 5 minutos e uma vez só."""
+        with trava:
+            return {"desafio": sessoes.criar_desafio(corpo.cnpj)}
+
+    @app.post("/sessoes", status_code=201, tags=["sessão"])
+    def entrar(assinado: dict[str, Any] = Body(
+            description="O desafio, com o campo 'assinatura' preenchido")) -> dict[str, Any]:
+        with trava:
+            return sessoes.abrir(assinado)
+
+    @app.delete("/sessoes", status_code=204, tags=["sessão"])
+    def sair(cnpj: Logado, token: Token) -> Response:
+        with trava:
+            sessoes.encerrar(token)
+        return Response(status_code=204)
+
+    # ----- consultas (exigem sessão; só dados da própria organização) -----
+
+    @app.get("/organizacao", tags=["consulta"])
+    def minha_organizacao(cnpj: Logado) -> dict[str, Any]:
+        with trava:
+            return plat()._org(cnpj)
+
+    @app.get("/agentes", tags=["consulta"])
+    def listar_agentes(cnpj: Logado) -> list[dict[str, Any]]:
+        with trava:
+            return plat().listar_agentes(cnpj)
+
+    @app.get("/mandatos", tags=["consulta"])
+    def listar_mandatos(cnpj: Logado) -> list[dict[str, Any]]:
+        with trava:
+            return plat().listar_mandatos(cnpj)
+
+    @app.get("/ofertas", tags=["consulta"])
+    def listar_ofertas(cnpj: Logado, status: StatusOferta | None = None) -> list[dict[str, Any]]:
+        with trava:
+            return plat().listar_ofertas(cnpj, status)
+
+    @app.get("/compromissos", tags=["consulta"])
+    def listar_compromissos(cnpj: Logado) -> list[dict[str, Any]]:
+        with trava:
+            return plat().listar_compromissos(cnpj)
 
     # ----- organização -----
 
@@ -238,6 +332,22 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
             if assinado.get("oferta_hash") != hash_sha256(oferta):
                 raise ErroElo("a aprovação enviada é de outra oferta")
             return plat().registrar_assinado(assinado, "aprovacao")
+
+    @app.post("/ofertas/{oferta_id}/recusa/rascunho", tags=["oferta"])
+    def preparar_recusa(oferta_id: str, corpo: PrepararRecusa) -> dict[str, Any]:
+        with trava:
+            return {"rascunho": plat().preparar_recusa(oferta_id, corpo.recusado_por,
+                                                       corpo.motivo)}
+
+    @app.post("/ofertas/{oferta_id}/recusa", status_code=201, tags=["oferta"])
+    def recusar_oferta(oferta_id: str,
+                       assinado: dict[str, Any] = ObjetoAssinado) -> dict[str, Any]:
+        """Recusa definitiva, assinada pela organização e gravada no registro."""
+        with trava:
+            oferta = plat()._oferta(oferta_id)  # 404 se não existir
+            if assinado.get("oferta_hash") != hash_sha256(oferta):
+                raise ErroElo("a recusa enviada é de outra oferta")
+            return plat().registrar_assinado(assinado, "recusa")
 
     @app.post("/ofertas/{oferta_id}/aceite", status_code=201, tags=["oferta"])
     def aceitar_oferta(oferta_id: str, corpo: Aceite) -> dict[str, Any]:

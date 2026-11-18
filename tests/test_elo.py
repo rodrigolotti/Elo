@@ -1,7 +1,7 @@
 import pytest
 
-from conftest import CNPJ_EMBARC, CNPJ_TRANSP, condicoes
-from elo.canonico import ErroCanonico, canonicalizar
+from conftest import CNPJ_EMBARC, CNPJ_TRANSP, cnpj_ficticio, condicoes
+from elo.canonico import ErroCanonico, canonicalizar, hash_sha256
 from elo.chaves import ParDeChaves, verificar_assinatura
 from elo.cnpj import validar_cnpj
 from elo.modelos import LimitesMandato
@@ -219,3 +219,113 @@ def test_registro_em_arquivo_persiste(tmp_path, relogio):
     reaberto = Plataforma(Registro(caminho), chave, relogio)
     assert len(reaberto.organizacoes) == 1
     assert reaberto.registro.verificar_integridade().integro
+
+
+# ---------- recusa de oferta ----------
+
+def _fora_do_mandato(cenario):
+    p = cenario["plataforma"]
+    oferta, problemas, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+                                               cenario["mandato_id"], cenario["chave_agente"],
+                                               condicoes(valor_centavos=900_000), VALIDADE)
+    assert problemas
+    return oferta, token
+
+
+def test_oferta_recusada_nao_pode_ser_aprovada_nem_aceita(cenario):
+    p = cenario["plataforma"]
+    oferta, token = _fora_do_mandato(cenario)
+    recusa = p.recusar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial",
+                              "valor acima da tabela")
+    assert recusa["tipo"] == "recusa" and recusa["motivo"] == "valor acima da tabela"
+    assert verificar_assinatura(recusa, p.organizacoes[CNPJ_TRANSP]["chave_publica"])
+    assert p.status_oferta[oferta["id"]] == "recusada"
+    with pytest.raises(ErroElo, match="recusada"):
+        p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial")
+    with pytest.raises(ErroElo, match="recusada"):
+        p.recusar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial")
+    with pytest.raises(ErroElo, match="recusada"):
+        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+
+
+def test_recusa_fica_no_registro_e_sobrevive_ao_reinicio(cenario):
+    p = cenario["plataforma"]
+    oferta, _ = _fora_do_mandato(cenario)
+    p.recusar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial")
+    assert [e.tipo for e in p.registro.eventos()][-1] == "oferta_recusada"
+    p._reconstruir()
+    assert p.status_oferta[oferta["id"]] == "recusada"
+    assert p.registro.verificar_integridade().integro
+
+
+def test_recusa_exige_chave_da_organizacao(cenario):
+    p = cenario["plataforma"]
+    oferta, _ = _fora_do_mandato(cenario)
+    for intruso in (ParDeChaves.gerar("intruso"), cenario["chave_agente"]):
+        with pytest.raises(ErroElo):
+            p.recusar_oferta(oferta["id"], intruso, "Intruso")
+    assert p.status_oferta[oferta["id"]] == "aguardando_aprovacao"
+
+
+def test_so_oferta_aguardando_aprovacao_pode_ser_recusada(cenario):
+    p = cenario["plataforma"]
+    oferta, _, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+                                   cenario["mandato_id"], cenario["chave_agente"],
+                                   condicoes(), VALIDADE)
+    with pytest.raises(ErroElo, match="enviada"):
+        p.recusar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial")
+
+
+def test_aprovacao_gravada_depois_da_recusa_nao_vale(cenario):
+    # cenário de conluio: alguém com acesso ao banco e à chave da organização
+    # grava uma aprovação e um aceite por fora das regras, depois da recusa
+    p = cenario["plataforma"]
+    oferta, _ = _fora_do_mandato(cenario)
+    p.recusar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial")
+    oferta_hash = hash_sha256(oferta)
+    p._incluir("oferta_aprovada", cenario["chave_org"].assinar({
+        "tipo": "aprovacao", "oferta_hash": oferta_hash, "aprovado_por": "Alguém",
+        "em": p._agora_iso()}), oferta["id"])
+    assert p.status_oferta[oferta["id"]] == "recusada"
+    cp = p.chave.assinar({"tipo": "compromisso", "id": "cp_forjado",
+                          "oferta_hash": oferta_hash,
+                          "aceite": {"cnpj": CNPJ_EMBARC, "nome": "Maria",
+                                     "email": "maria@exemplo.com", "modo": "humano_via_link",
+                                     "em": p._agora_iso()}})
+    p._incluir("compromisso_firmado", cp, cp["id"])
+    relatorio = p.verificar_compromisso("cp_forjado")
+    assert not relatorio.valido
+    autorizacao = next(v for v in relatorio.verificacoes if v.nome == "Oferta autorizada")
+    assert not autorizacao.ok and "recusada pela organização" in autorizacao.detalhe
+
+
+# ---------- consultas do painel ----------
+
+def test_consultas_so_trazem_a_propria_organizacao(cenario):
+    p = cenario["plataforma"]
+    dentro, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+                                       cenario["mandato_id"], cenario["chave_agente"],
+                                       condicoes(), VALIDADE)
+    fora, _ = _fora_do_mandato(cenario)
+    cp = p.aceitar_oferta(dentro["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+
+    pendentes = p.listar_ofertas(CNPJ_TRANSP, "aguardando_aprovacao")
+    assert [o["oferta"]["id"] for o in pendentes] == [fora["id"]]
+    assert any("acima do limite" in v for v in pendentes[0]["violacoes"])
+    assert {o["status"] for o in p.listar_ofertas(CNPJ_TRANSP)} == {"aceita",
+                                                                    "aguardando_aprovacao"}
+    [compromisso] = p.listar_compromissos(CNPJ_TRANSP)
+    assert compromisso["verificacao"] == f"/verificar/{cp['id']}"
+    [agente] = p.listar_agentes(CNPJ_TRANSP)
+    assert agente["agente_id"] == cenario["agente_id"]
+    [mandato] = p.listar_mandatos(CNPJ_TRANSP)
+    assert mandato["revogado_em"] is None and mandato["agente_nome"] == "Agente de cotação"
+
+    # outra organização não vê nada da primeira
+    outra = cnpj_ficticio("998887770001")
+    p.cadastrar_organizacao(outra, "Outra Transportadora Ltda", ParDeChaves.gerar("outra"))
+    assert p.listar_ofertas(outra) == [] and p.listar_compromissos(outra) == []
+    assert p.listar_agentes(outra) == [] and p.listar_mandatos(outra) == []
+
+    p.revogar_mandato(cenario["mandato_id"], cenario["chave_org"])
+    assert p.listar_mandatos(CNPJ_TRANSP)[0]["revogado_em"] is not None
