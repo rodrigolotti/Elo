@@ -207,8 +207,23 @@ class Pagina {
     if (lixo.length) falhar(`texto indevido na tela: ${JSON.stringify(lixo)}`);
   }
 
+  // nenhum aviso pode ficar em cima de um botão ou link de ação
+  async avisosNaoCobremBotoes() {
+    const cobertos = await this.avaliar(`(() => {
+      const caixa = (e) => e.getBoundingClientRect();
+      const cruza = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const avisos = [...document.querySelectorAll("#avisos .aviso")].map(caixa);
+      return [...document.querySelectorAll("button, a.botao, nav a")]
+        .filter((b) => !b.closest("#avisos") && b.offsetParent !== null)
+        .filter((b) => avisos.some((a) => cruza(a, caixa(b))))
+        .map((b) => b.textContent.trim());
+    })()`);
+    if (cobertos.length) falhar(`aviso em cima de: ${JSON.stringify(cobertos)}`);
+  }
+
   async capturar(nome) {
     await this.semLixoNaTela();
+    await this.avisosNaoCobremBotoes();
     await esperar(150);
     const { data } = await this.cdp("Page.captureScreenshot",
       { format: "png", captureBeyondViewport: true });
@@ -301,7 +316,7 @@ async function emitirMandatoPelaTela(p, captura) {
   })()`);
   await p.preencher("form textarea", "carga geral");
   if (captura) await p.capturar(captura);
-  await p.clicar("Assinar mandato");
+  await p.clicar("Emitir mandato");
   await p.aguardarTexto("emitido.");
   await p.aguardar("[...document.querySelectorAll('.etiqueta.bom')].some((e) => e.textContent === 'Ativo')");
 }
@@ -329,31 +344,58 @@ async function roteiro() {
 
   console.log("1. Entrar sem chave no navegador");
   await p.ir(`${BASE}/painel/`);
-  await p.aguardarTexto("Nenhuma organização tem chave neste navegador.");
+  await p.aguardarTexto("Nenhuma transportadora tem acesso guardado neste computador.");
   await p.capturar("entrar-vazio");
   ok("tela de entrada sem organização");
 
   console.log("2. Cadastro da organização");
-  await p.clicar("Cadastrar organização");
-  await p.aguardarTexto("Atenção: a chave da organização fica só neste navegador");
+  await p.clicar("Cadastrar transportadora");
+  await p.aguardarTexto("Importante: o acesso da transportadora fica guardado neste computador");
   await p.preencher("input[name=cnpj]", CNPJ_TRANSP);
   await p.preencher("input[name=razao_social]", "Transportadora Fictícia Ltda");
   await p.capturar("cadastro");
-  await p.clicar("Gerar chave e cadastrar");
+  await p.clicar("Cadastrar transportadora");
   const bloqueado = await p.avaliar("location.hash");
   if (bloqueado !== "#/cadastro") falhar("enviou sem marcar o 'Entendi'");
   await p.avaliar(`document.querySelector(".confirmacao input").checked = true`);
-  await p.clicar("Gerar chave e cadastrar");
+  await p.clicar("Cadastrar transportadora");
   await p.aguardar("document.querySelector('.frase-senha')", 15000);
-  await p.aguardarTexto("Transportadora Fictícia Ltda");
+  if (!(await p.avaliar("!!JSON.parse(sessionStorage.getItem('elo.sessao'))?.token"))) {
+    falhar("depois do cadastro a sessão deveria estar aberta");
+  }
   ok("organização cadastrada, sessão aberta");
   const frase1 = await p.avaliar("document.querySelector('.frase-senha').textContent");
   if (!/^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){4}$/.test(frase1)) falhar(`frase: ${frase1}`);
   await p.aguardarTexto("Anote a frase-senha em papel e guarde separada do arquivo.");
+  await p.aguardarTexto("Sem isso, se você trocar de computador ou o navegador for limpo, "
+    + "perde o acesso à conta da transportadora.");
+  await p.aguardarTexto("Este navegador pode apagar seu acesso se faltar espaço");
   await p.capturar("frase-senha");
+  ok("passo 2 explica o motivo; o alerta de espaço fica dentro do passo, sem cobrir botões");
+
+  // passo 2: sem menu, sem "Sair", e sair por outro caminho pede confirmação
+  if (await p.avaliar("!!document.querySelector('nav') || [...document.querySelectorAll('button')]"
+      + ".some((b) => b.textContent.trim() === 'Sair')")) {
+    falhar("o menu ou o 'Sair' aparecem durante o passo 2");
+  }
+  await p.avaliar("location.hash = '#/agentes'");
+  await p.aguardar("document.querySelector('dialog').open");
+  await p.aguardarTexto("Sair sem guardar o arquivo de recuperação?");
+  await p.capturar("sair-do-passo-2");
+  await p.clicar("Continuar no passo", "document.querySelector('dialog')");
+  await p.aguardar("!document.querySelector('dialog').open && location.hash === '#/cadastro'");
+  if (await p.avaliar("document.querySelector('.frase-senha')?.textContent") !== frase1) {
+    falhar("ao continuar no passo, a frase-senha mudou ou sumiu");
+  }
+  if (await p.avaliar("!!document.querySelector('nav')")) falhar("o menu voltou durante o passo 2");
+  ok("passo 2 sem menu; sair pede confirmação e 'Continuar no passo' mantém a mesma frase");
   const arquivo1 = await guardarRecuperacao(p, DOWNLOADS1, frase1, true);
   await p.aguardar("location.hash === '#/agentes'");
-  ok("frase mostrada, arquivo baixado; grupos errados não concluem, certos concluem");
+  await p.aguardar("document.querySelector('nav a[href=\"#/seguranca\"]')");
+  if (await p.avaliar("!!document.querySelector('nav a[href=\"#/seguranca\"] .contador')")) {
+    falhar("a aba Segurança não deveria acusar falta de recuperação");
+  }
+  ok("frase mostrada, arquivo baixado; grupos errados não concluem, certos concluem; menu volta");
 
   const chave = await p.avaliar(`new Promise((ok, erro) => {
     const pedido = indexedDB.open("elo-painel");
@@ -383,11 +425,11 @@ async function roteiro() {
   await p.preencher("form input", "Agente de cotação", 0);
   await p.preencher("form input", "agente-cotacao#k1", 1);
   await p.preencher("form textarea", "isto não é uma chave");
-  await p.clicar("Assinar certificado");
-  await p.aguardarTexto("32 bytes em base64");
+  await p.clicar("Cadastrar agente");
+  await p.aguardarTexto("A chave pública do agente não parece válida");
   await p.preencher("form textarea", pubAgente);
-  await p.clicar("Assinar certificado");
-  await p.aguardarTexto("Agente Agente de cotação criado");
+  await p.clicar("Cadastrar agente");
+  await p.aguardarTexto("Agente “Agente de cotação” cadastrado");
   await p.aguardar("document.querySelectorAll('tbody tr').length === 1");
   await p.capturar("agentes");
   ok("chave inválida recusada no formulário; agente criado");
@@ -428,7 +470,7 @@ async function roteiro() {
   await p.aguardar("document.querySelector('dialog').open");
   await p.preencher("dialog input", "Ana Gestora");
   await p.capturar("dialogo-aprovacao");
-  await p.clicar("Assinar aprovação", "document.querySelector('dialog')");
+  await p.clicar("Aprovar oferta", "document.querySelector('dialog')");
   await p.aguardarTexto(`Oferta ${aprovar.oferta.id} aprovada.`);
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
   ok("oferta aprovada com assinatura do navegador");
@@ -440,7 +482,7 @@ async function roteiro() {
   });
   await p.preencher("dialog textarea", "Valor acima da tabela do cliente");
   await p.capturar("dialogo-recusa");
-  await p.clicar("Assinar recusa", "document.querySelector('dialog')");
+  await p.clicar("Recusar oferta", "document.querySelector('dialog')");
   await p.aguardarTexto(`Oferta ${recusar.oferta.id} recusada.`);
   await p.aguardarTexto("Nenhuma oferta aguardando aprovação.");
   ok("oferta recusada; fila vazia");
@@ -476,7 +518,7 @@ async function roteiro() {
   await p.clicar("Revogar mandato");
   await p.aguardar("document.querySelector('dialog').open");
   await p.capturar("dialogo-revogacao");
-  await p.clicar("Assinar revogação", "document.querySelector('dialog')");
+  await p.clicar("Confirmar revogação", "document.querySelector('dialog')");
   await p.aguardar("document.querySelector('.etiqueta.ruim')?.textContent === 'Revogado'");
   await p.capturar("mandato-revogado");
   const depois = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 100_000);
@@ -495,7 +537,7 @@ async function roteiro() {
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
   ok("saiu (token encerrado) e entrou de novo assinando o desafio");
   await p.menu("/seguranca");
-  await p.aguardarTexto("Histórico de chaves");
+  await p.aguardarTexto("Histórico de acesso");
   await p.capturar("seguranca");
   await emitirMandatoPelaTela(p);
   const [{ mandato: { id: mandato2Id } }] = (await comToken(await tokenDa(p), "/mandatos"))
@@ -510,8 +552,8 @@ async function roteiro() {
     { url: "about:blank", browserContextId });
   const p2 = await Pagina.abrir(targetId);
   await p2.ir(`${BASE}/painel/`);
-  await p2.aguardarTexto("Nenhuma organização tem chave neste navegador.");
-  await p2.clicar("Recuperar com o arquivo");
+  await p2.aguardarTexto("Nenhuma transportadora tem acesso guardado neste computador.");
+  await p2.clicar("Recuperar acesso com o arquivo");
   await p2.aguardarTexto("1. Abrir o arquivo de recuperação");
   await p2.escolherArquivo("input[type=file]", arquivo1);
   await p2.preencher("input[name=frase]", "ABCDE-FGHJK-MNPQR-STVWX-YZ012");
@@ -532,7 +574,7 @@ async function roteiro() {
     falhar("'Revogar todos os mandatos ativos' deveria vir marcado");
   }
   await p2.capturar("recuperar-trocar");
-  await p2.clicar("Trocar a chave da organização");
+  await p2.clicar("Recuperar o acesso");
   await p2.aguardar("location.hash === '#/mandatos'", 20000);
   await p2.aguardar("document.querySelectorAll('.etiqueta').length === 2 && "
     + "[...document.querySelectorAll('.etiqueta')].every((e) => e.textContent === 'Revogado')");
@@ -575,7 +617,7 @@ async function roteiro() {
   await p.aguardar("document.readyState === 'complete'");
   await p.aguardarTexto("Transportadora Fictícia Ltda");
   await p.clicar("Entrar");
-  await p.aguardarTexto("A chave guardada neste navegador não é mais a chave da organização");
+  await p.aguardarTexto("O acesso guardado neste computador não vale mais");
   await p.capturar("chave-antiga-recusada");
   if (await p.avaliar("location.hash") !== "#/entrar") falhar("a chave antiga entrou");
   // o 401 de POST /sessoes é o esperado aqui

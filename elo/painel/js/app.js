@@ -36,22 +36,43 @@ const MENU = [
   ["/seguranca", "Segurança"],
 ];
 
+// Enquanto um passo obrigatório está na tela (o arquivo de recuperação do
+// cadastro), o menu some e qualquer saída pede confirmação.
+let passoObrigatorio = null; // { hash, titulo, corpo }
+
+function bloquearSaida(bloqueio) {
+  passoObrigatorio = bloqueio;
+}
+
+function liberarSaida() {
+  passoObrigatorio = null;
+}
+
+window.addEventListener("beforeunload", (evento) => {
+  if (passoObrigatorio) {
+    evento.preventDefault();
+    evento.returnValue = ""; // o navegador mostra a pergunta dele
+  }
+});
+
 function desenharTopo(caminho, pendentes, semRecuperacao) {
   const atual = api.sessao();
+  const emPasso = passoObrigatorio !== null;
   limpar(topo).append(h("div", { class: "topo-dentro" },
     h("a", { class: "marca", href: atual ? "#/aprovacoes" : "#/entrar" },
       h("span", { class: "marca-elo" }, "Elo"),
-      atual ? null : h("span", { class: "marca-sub" }, "Painel da transportadora")),
-    atual ? h("nav", { "aria-label": "Seções" },
+      atual && !emPasso ? null : h("span", { class: "marca-sub" },
+        emPasso ? "Cadastro: passo 2 de 2" : "Painel da transportadora")),
+    atual && !emPasso ? h("nav", { "aria-label": "Seções" },
       MENU.map(([alvo, nome]) => h("a", {
         href: `#${alvo}`, class: alvo === caminho ? "ativo" : null,
         "aria-current": alvo === caminho ? "page" : null,
       }, nome,
       alvo === "/aprovacoes" && pendentes ? h("span", { class: "contador" }, pendentes) : null,
       alvo === "/seguranca" && semRecuperacao
-        ? h("span", { class: "contador", title: "Sem chave de recuperação" }, "!") : null)))
+        ? h("span", { class: "contador", title: "Sem arquivo de recuperação" }, "!") : null)))
       : null,
-    atual ? h("div", { class: "quem" },
+    atual && !emPasso ? h("div", { class: "quem" },
       h("span", { class: "quem-nome" }, atual.razaoSocial),
       h("span", { class: "quem-cnpj mono" }, atual.cnpj),
       h("button", { type: "button", class: "botao secundario pequeno", onclick: async () => {
@@ -73,8 +94,23 @@ const ROTAS = {
 };
 const ABERTAS = new Set(["/entrar", "/cadastro", "/recuperar"]);
 let navegacao = 0;
+let perguntandoSaida = false;
 
 async function navegar() {
+  if (passoObrigatorio) {
+    if (location.hash === passoObrigatorio.hash || perguntandoSaida) return;
+    perguntandoSaida = true;
+    const sair = await confirmar({
+      titulo: passoObrigatorio.titulo, corpo: passoObrigatorio.corpo,
+      botao: "Sair mesmo assim", cancelar: "Continuar no passo", perigo: true,
+    });
+    perguntandoSaida = false;
+    if (!sair) {
+      location.hash = passoObrigatorio.hash; // volta sem refazer a tela
+      return;
+    }
+    liberarSaida();
+  }
   const minha = ++navegacao;
   const logado = api.sessao() !== null;
   const caminho = location.hash.slice(1) || (logado ? "/aprovacoes" : "/entrar");
@@ -108,25 +144,24 @@ const recarregar = () => navegar();
 
 async function telaEntrar() {
   if (!(await temEd25519())) {
-    return h("section", {}, cabecalho("Navegador sem suporte"),
+    return h("section", {}, cabecalho("Navegador desatualizado"),
       h("div", { class: "caixa alerta" },
-        h("p", {}, "Este navegador não tem assinatura Ed25519 na Web Crypto API, "
-          + "que o painel usa para que a chave da organização nunca saia do seu computador."),
+        h("p", {}, "Este navegador não tem o recurso de segurança que o painel usa para guardar "
+          + "o acesso da transportadora só neste computador."),
         h("p", {}, "Use uma versão atual do Chrome, Edge (137 ou mais nova), Firefox (129 ou "
           + "mais nova) ou Safari (17 ou mais novo).")));
   }
   const registros = await listarChaves();
   const secao = h("section", {}, cabecalho("Entrar",
-    "Escolha a organização. A entrada é feita assinando um desafio com a chave "
-    + "guardada neste navegador; não há senha."));
+    "Entre com um clique. Seu acesso fica guardado neste computador, sem senha."));
   if (registros.length === 0) {
-    secao.append(vazio("Nenhuma organização tem chave neste navegador.",
-      h("p", { class: "ajuda" }, "Se a organização foi cadastrada em outro navegador, ou se os "
-        + "dados deste navegador foram apagados, a chave não está aqui. Use o arquivo de "
-        + "recuperação e a frase-senha para trocar a chave."),
+    secao.append(vazio("Nenhuma transportadora tem acesso guardado neste computador.",
+      h("p", { class: "ajuda" }, "Se a transportadora foi cadastrada em outro computador, ou se "
+        + "este navegador foi limpo, use o arquivo de recuperação e a frase-senha para voltar "
+        + "a entrar."),
       h("div", { class: "acoes centro" },
-        h("a", { class: "botao secundario", href: "#/recuperar" }, "Recuperar com o arquivo"),
-        h("a", { class: "botao primario", href: "#/cadastro" }, "Cadastrar organização"))));
+        h("a", { class: "botao secundario", href: "#/recuperar" }, "Recuperar acesso com o arquivo"),
+        h("a", { class: "botao primario", href: "#/cadastro" }, "Cadastrar transportadora"))));
     return secao;
   }
   secao.append(h("div", { class: "lista-cartoes" }, registros.map((r) => {
@@ -144,12 +179,12 @@ async function telaEntrar() {
     return h("article", { class: "cartao" },
       h("div", { class: "cartao-org" },
         h("div", {}, h("h2", {}, r.razaoSocial), mono(r.cnpj),
-          h("p", { class: "ajuda" }, `Chave ${r.chaveId}, criada em ${emBrasilia(r.criadaEm)}`)),
+          h("p", { class: "ajuda" }, `Acesso guardado neste computador em ${emBrasilia(r.criadaEm)}`)),
         botao),
       erro);
   })), h("p", { class: "links" },
-    h("a", { href: "#/recuperar" }, "Perdi a chave deste navegador ou estou em outro computador"),
-    h("a", { href: "#/cadastro" }, "Cadastrar outra organização")));
+    h("a", { href: "#/recuperar" }, "Perdi o acesso neste computador ou estou em outro computador"),
+    h("a", { href: "#/cadastro" }, "Cadastrar outra transportadora")));
   return secao;
 }
 
@@ -157,20 +192,18 @@ async function telaEntrar() {
 
 function avisoPerdaDeChave() {
   return h("div", { class: "caixa alerta" },
-    h("h2", {}, "Atenção: a chave da organização fica só neste navegador"),
-    h("p", {}, "Ao cadastrar, o navegador cria a chave privada da organização. Ela é marcada "
-      + "como não exportável e nunca é enviada ao servidor: nem o Elo, nem este painel "
-      + "conseguem copiá-la."),
-    h("p", {}, "Ela se perde se você limpar os dados de navegação ou do site, desinstalar o "
-      + "navegador, trocar de computador, usar janela anônima, ou, no Safari, ficar 7 dias "
-      + "sem abrir o painel."),
-    h("p", {}, h("strong", {}, "A única forma de recuperá-la é o arquivo de recuperação com a "
-      + "frase-senha,"), " que você cria no próximo passo. Sem eles, a organização não consegue "
-      + "mais criar agentes, emitir mandatos, aprovar ou recusar ofertas, nem ",
+    h("h2", {}, "Importante: o acesso da transportadora fica guardado neste computador"),
+    h("p", {}, "Ao cadastrar, o acesso é criado e guardado só neste navegador. Ninguém, nem a "
+      + "equipe do Elo, consegue copiá-lo ou usá-lo por você."),
+    h("p", {}, "Ele se perde se o navegador for limpo ou desinstalado, se você trocar de "
+      + "computador, usar janela anônima ou, no Safari, ficar 7 dias sem abrir o painel."),
+    h("p", {}, h("strong", {}, "A única forma de voltar a entrar é o arquivo de recuperação "
+      + "com a frase-senha,"), " que você cria no próximo passo. Sem eles, a transportadora não "
+      + "consegue mais cadastrar agentes, dar mandatos, aprovar ou recusar ofertas, nem ",
       h("strong", {}, "revogar um mandato"),
-      ". Os compromissos já firmados continuam válidos e verificáveis."),
+      ". Os acordos já fechados continuam valendo."),
     h("ul", {},
-      h("li", {}, "Use um perfil de navegador só para o painel, em um computador da empresa."),
+      h("li", {}, "Use um computador da empresa e um navegador só para o painel."),
       h("li", {}, "Não use janela anônima e não limpe os dados deste site."),
       h("li", {}, "Guarde o arquivo de recuperação e a frase-senha em lugares separados.")));
 }
@@ -183,15 +216,15 @@ async function telaCadastro() {
                              autocomplete: "organization" });
   const entendi = h("input", { type: "checkbox", required: true });
   const botao = h("button", { type: "submit", class: "botao primario" },
-    "Gerar chave e cadastrar");
+    "Cadastrar transportadora");
 
   const form = h("form", { class: "formulario" },
     campo("CNPJ", cnpj),
     campo("Razão social", razao),
     avisoPerdaDeChave(),
     h("label", { class: "confirmacao" }, entendi,
-      h("span", {}, "Entendi que, sem o arquivo de recuperação e a frase-senha, perder a chave "
-        + "deste navegador é irreversível.")),
+      h("span", {}, "Entendi: sem o arquivo de recuperação e a frase-senha, perder o acesso "
+        + "deste computador não tem volta.")),
     h("div", { class: "acoes" }, h("a", { class: "botao secundario", href: "#/entrar" }, "Voltar"),
       botao));
 
@@ -212,25 +245,33 @@ async function telaCadastro() {
         conferirRascunho(rascunho, { tipo: "organizacao", razao_social: razaoSocial,
                                      chave_id: chaveId, chave_publica: chavePublica });
         if (soDigitos(rascunho.cnpj) !== soDigitos(cnpj.value)) {
-          throw new Error("o servidor devolveu outro CNPJ; nada foi assinado");
+          throw new Error("O Elo devolveu um CNPJ diferente do informado; nada foi registrado.");
         }
         const registro = { cnpj: rascunho.cnpj, razaoSocial, chaveId, par, chavePublica,
                            privada: par.privateKey };
         await guardarChave(registro).catch(() => {
-          throw new Error("Já existe uma chave desta organização neste navegador.");
+          throw new Error("Esta transportadora já tem acesso guardado neste computador.");
         });
         cadastrado = rascunho.cnpj;
         await api.enviar("/organizacoes", await assinar(rascunho, par.privateKey, chaveId));
         cadastrado = null; // deu certo: a chave fica
         const persistente = await pedirArmazenamentoPersistente();
         await api.entrar(registro);
-        avisar("Organização cadastrada. A chave está guardada neste navegador.");
-        if (!persistente) {
-          avisar("O navegador não garantiu armazenamento persistente: ele pode apagar a "
-            + "chave se faltar espaço. Evite limpar os dados deste site.", "alerta");
-        }
+        avisar("Transportadora cadastrada. O acesso está guardado neste computador.");
+        // passo 2 obrigatório: sem menu, e sair pede confirmação
+        bloquearSaida({
+          hash: location.hash,
+          titulo: "Sair sem guardar o arquivo de recuperação?",
+          corpo: ["A transportadora ainda não tem arquivo de recuperação. Sem ele, se você "
+            + "trocar de computador ou o navegador for limpo, perde o acesso à conta da "
+            + "transportadora.",
+          "Dá para criar depois, na aba Segurança, mas o melhor é terminar agora."],
+        });
         desenharTopo("/cadastro", 0, true);
-        telaRecuperacaoDoCadastro(conteudo);
+        const registrado = await telaRecuperacaoDoCadastro(conteudo, { persistente });
+        if (passoObrigatorio === null) return; // a pessoa saiu antes de terminar
+        liberarSaida();
+        location.hash = registrado ? "#/agentes" : "#/seguranca";
       } catch (erro) {
         if (cadastrado) await apagarChave(cadastrado).catch(() => {});
         avisarErro(erro);
@@ -239,7 +280,7 @@ async function telaCadastro() {
   });
 
   return h("section", {}, cabecalho("Cadastrar organização",
-    "Cadastre a transportadora no Elo. A chave da organização é criada aqui, no navegador."),
+    "Cadastre a transportadora no Elo. O acesso é criado aqui, neste computador."),
     form);
 }
 
@@ -250,7 +291,7 @@ function campoResponsavel() {
                                autocomplete: "name" });
   entrada.addEventListener("change", () =>
     localStorage.setItem("elo.responsavel", entrada.value.trim()));
-  return { entrada, rotulo: campo("Seu nome (vai na assinatura)", entrada) };
+  return { entrada, rotulo: campo("Seu nome (fica registrado na decisão)", entrada) };
 }
 
 function cartaoOferta(item, agentes) {
@@ -266,21 +307,22 @@ function cartaoOferta(item, agentes) {
     const resumo = `oferta ${oferta.id} de ${reais(c.valor_centavos)} para ${oferta.destinatario_cnpj}`;
     const ok = await confirmar(tipo === "aprovacao" ? {
       titulo: "Aprovar oferta",
-      corpo: [`Você vai assinar a aprovação da ${resumo}, com a chave da organização.`,
+      corpo: [`Você vai aprovar a ${resumo}. A aprovação fica registrada em nome da `
+              + "transportadora e não pode ser apagada.",
               "Depois disso o embarcador pode aceitá-la pelo link enviado pelo agente."],
-      botao: "Assinar aprovação",
+      botao: "Aprovar oferta",
       campos: [responsavel.rotulo],
     } : {
       titulo: "Recusar oferta",
-      corpo: [`Você vai assinar a recusa da ${resumo}. A recusa é definitiva: a oferta não `
+      corpo: [`Você vai recusar a ${resumo}. A recusa é definitiva: a oferta não `
               + "poderá mais ser aprovada nem aceita."],
-      botao: "Assinar recusa",
+      botao: "Recusar oferta",
       perigo: true,
       campos: [responsavel.rotulo, campo("Motivo (opcional)", motivo)],
     });
     if (!ok) return;
     const nome = responsavel.entrada.value.trim();
-    if (!nome) return avisar("Informe seu nome para assinar.", "erro");
+    if (!nome) return avisar("Informe seu nome para registrar a decisão.", "erro");
     localStorage.setItem("elo.responsavel", nome);
     await executando(botao, async () => {
       try {
@@ -339,7 +381,7 @@ async function telaAprovacoes() {
     api.obter("/ofertas?status=aguardando_aprovacao"), api.obter("/agentes")]);
   const porId = new Map(agentes.map((a) => [a.agente_id, a]));
   return h("section", {}, cabecalho("Ofertas aguardando aprovação",
-    "Ofertas que o agente fez fora do mandato. Nada sai sem a sua assinatura."),
+    "Ofertas que o agente fez fora do mandato. Nada sai sem a sua aprovação."),
     pendentes.length === 0
       ? vazio("Nenhuma oferta aguardando aprovação.")
       : h("div", { class: "lista-cartoes" },
@@ -356,12 +398,13 @@ async function telaAgentes() {
   const chaveId = h("input", { required: true, maxlength: 100, class: "mono",
                                placeholder: "agente-cotacao#k1" });
   const chavePublica = h("textarea", { required: true, rows: 2, class: "mono",
-                                       placeholder: "32 bytes em base64" });
-  const botao = h("button", { type: "submit", class: "botao primario" }, "Assinar certificado");
+                                       placeholder: "Fornecida por quem instalou o agente" });
+  const botao = h("button", { type: "submit", class: "botao primario" }, "Cadastrar agente");
   const form = h("form", { class: "formulario cartao" },
     h("h2", {}, "Novo agente"),
-    h("p", { class: "ajuda" }, "A chave privada do agente fica no sistema onde ele roda; cole "
-      + "aqui só a chave pública. A organização assina um certificado ligando essa chave a ela."),
+    h("p", { class: "ajuda" }, "O agente é o sistema que faz as cotações. Quem o instalou "
+      + "fornece o identificador e a chave pública dele; cole aqui. A transportadora registra "
+      + "que esse agente fala em nome dela."),
     campo("Nome", nome),
     campo("Identificador da chave", chaveId),
     campo("Chave pública Ed25519", chavePublica),
@@ -370,7 +413,8 @@ async function telaAgentes() {
     evento.preventDefault();
     const pub = chavePublica.value.trim();
     if (!chavePublicaValida(pub)) {
-      avisar("A chave pública precisa ter 32 bytes em base64 (Ed25519).", "erro");
+      avisar("A chave pública do agente não parece válida. Confira com quem instalou o agente "
+        + "e cole de novo, sem cortar nenhum caractere.", "erro");
       return;
     }
     executando(botao, async () => {
@@ -382,7 +426,7 @@ async function telaAgentes() {
           esperado: { tipo: "certificado_agente", cnpj: corpo.cnpj, nome: corpo.nome,
                       chave_id: corpo.chave_id, chave_publica: pub },
         });
-        avisar(`Agente ${agente.nome} criado (${agente.agente_id}).`);
+        avisar(`Agente “${agente.nome}” cadastrado.`);
         recarregar();
       } catch (erro) {
         avisarErro(erro);
@@ -396,7 +440,7 @@ async function telaAgentes() {
       h("td", {}, a.nome), h("td", {}, mono(a.agente_id)), h("td", {}, mono(a.chave_id)),
       h("td", {}, emBrasilia(a.emitido_em))))));
   return h("section", {}, cabecalho("Agentes",
-    "Cada agente tem um certificado assinado pela organização."),
+    "Os sistemas que fazem cotações em nome da transportadora, cada um dentro do mandato que você der."),
     h("div", { class: "duas-colunas" }, h("div", {}, tabela), form));
 }
 
@@ -420,11 +464,11 @@ function cartaoMandato(item) {
   revogar?.addEventListener("click", async () => {
     const ok = await confirmar({
       titulo: "Revogar mandato",
-      corpo: [`Você vai assinar a revogação do mandato ${mandato.id} de `
+      corpo: [`Você vai revogar o mandato ${mandato.id} de `
               + `${item.agente_nome ?? mandato.agente_id}.`,
               "É irreversível. A partir de agora, ofertas feitas com este mandato vão para "
               + "aprovação humana. Compromissos já firmados continuam válidos."],
-      botao: "Assinar revogação",
+      botao: "Confirmar revogação",
       perigo: true,
     });
     if (!ok) return;
@@ -481,7 +525,7 @@ async function telaMandatos() {
   const de = h("input", { type: "datetime-local", required: true, value: localDeBrasilia(agora) });
   const ate = h("input", { type: "datetime-local", required: true,
                            value: localDeBrasilia(new Date(agora.getTime() + 30 * 864e5)) });
-  const botao = h("button", { type: "submit", class: "botao primario" }, "Assinar mandato");
+  const botao = h("button", { type: "submit", class: "botao primario" }, "Emitir mandato");
 
   const form = h("form", { class: "formulario cartao" },
     h("h2", {}, "Novo mandato"),
@@ -527,7 +571,7 @@ async function telaMandatos() {
   const ordenados = mandatos.sort((a, b) =>
     b.mandato.emitido_em.localeCompare(a.mandato.emitido_em));
   return h("section", {}, cabecalho("Mandatos",
-    "Limites assinados pela organização para cada agente. Revogue se um agente sair do controle."),
+    "O que cada agente pode oferecer sozinho. Revogue se um agente sair do controle."),
     h("div", { class: "duas-colunas" },
       h("div", { class: "lista-cartoes" },
         ordenados.length ? ordenados.map(cartaoMandato) : vazio("Nenhum mandato ainda.")),

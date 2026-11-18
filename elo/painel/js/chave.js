@@ -15,6 +15,12 @@ import {
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
+// nomes dos eventos de chave do protocolo, na linguagem da tela
+const EVENTOS_DE_ACESSO = {
+  "definição de chave de recuperação": "Arquivo de recuperação criado",
+  "rotação de chave": "Acesso recuperado (acesso antigo desativado)",
+};
+
 /** Mesma normalização da frase (O vira 0; I e L viram 1), por grupo de 5. */
 const normalizarGrupo = (texto) => String(texto).toUpperCase().replace(/[\s-]/g, "")
   .replaceAll("O", "0").replace(/[IL]/g, "1");
@@ -37,9 +43,9 @@ function erroNaTela(texto) {
  * o arquivo e digitar dois grupos sorteados da frase. Sem acertar, não conclui.
  * Devolve { elemento, pronto } (pronto resolve com { chaveId, chavePublica }).
  */
-export function passoArquivoRecuperacao({ cnpj }) {
+export function passoArquivoRecuperacao({ cnpj, persistente = true }) {
   const elemento = h("section", { class: "cartao passo-recuperacao" },
-    h("p", { class: "carregando" }, "Gerando a chave de recuperação…"));
+    h("p", { class: "carregando" }, "Preparando o arquivo de recuperação…"));
   const pronto = (async () => {
     const chaveId = `recuperacao-${String(cnpj).replace(/\D/g, "")}#${hoje()}`;
     let frase = gerarFraseSenha();
@@ -61,19 +67,24 @@ export function passoArquivoRecuperacao({ cnpj }) {
           continuar.disabled = false;
         });
         continuar.addEventListener("click", pedirGrupos);
-        limpar(elemento).append(
-          h("h2", {}, "Chave de recuperação"),
-          h("p", {}, "Se a chave deste navegador se perder, é com o arquivo de recuperação e "
-            + "esta frase-senha que a organização troca de chave. Ela aparece só agora."),
+        anexar(limpar(elemento), [
+          h("h2", {}, "Arquivo de recuperação"),
+          h("p", {}, h("strong", {}, "Sem isso, se você trocar de computador ou o navegador for "
+            + "limpo, perde o acesso à conta da transportadora.")),
+          h("p", {}, "Com o arquivo de recuperação e esta frase-senha, você volta a entrar. "
+            + "A frase aparece só agora."),
+          persistente ? null : h("div", { class: "caixa alerta" },
+            h("p", {}, "Este navegador pode apagar seu acesso se faltar espaço no computador. "
+              + "Mais um motivo para guardar o arquivo e a frase.")),
           h("div", { class: "frase-senha", "aria-label": "Frase-senha" }, frase),
           h("div", { class: "caixa alerta" },
             h("p", {}, h("strong", {}, "Anote a frase-senha em papel e guarde separada do arquivo.")),
             h("ul", {},
-              h("li", {}, "Quem tiver o arquivo e a frase toma o controle da organização."),
+              h("li", {}, "Quem tiver o arquivo e a frase toma o controle da conta da transportadora."),
               h("li", {}, "Sem a frase, o arquivo não abre. O Elo não guarda nenhum dos dois "
                 + "e não consegue recuperá-los."),
               h("li", {}, "Não fotografe a frase nem a guarde no mesmo lugar do arquivo."))),
-          h("div", { class: "acoes" }, baixar, continuar));
+          h("div", { class: "acoes" }, baixar, continuar)]);
       }
 
       function pedirGrupos() {
@@ -104,7 +115,7 @@ export function passoArquivoRecuperacao({ cnpj }) {
           }
           frase = null; // melhor esforço: a frase não fica guardada em lugar nenhum
           grupos.fill("");
-          limpar(elemento).append(h("p", { class: "carregando" }, "Registrando a chave de recuperação…"));
+          limpar(elemento).append(h("p", { class: "carregando" }, "Registrando…"));
           resolve({ chaveId, chavePublica });
         });
         limpar(elemento).append(form);
@@ -131,23 +142,25 @@ async function registrarRecuperacao({ chaveId, chavePublica }) {
   });
 }
 
-/** Passo 2 do cadastro: a organização acabou de entrar e ainda não tem recuperação. */
-export function telaRecuperacaoDoCadastro(conteudo) {
-  const passo = passoArquivoRecuperacao({ cnpj: api.sessao().cnpj });
+/**
+ * Passo 2 do cadastro: a transportadora acabou de entrar e ainda não tem
+ * arquivo de recuperação. Resolve true se registrou, false se deu erro.
+ */
+export async function telaRecuperacaoDoCadastro(conteudo, { persistente }) {
+  const passo = passoArquivoRecuperacao({ cnpj: api.sessao().cnpj, persistente });
   limpar(conteudo).append(h("section", {},
-    cabecalho("Guarde a chave de recuperação",
-      "Passo 2 de 2. A organização já está cadastrada; falta o que permite recuperar a chave."),
+    cabecalho("Guarde o arquivo de recuperação",
+      "Passo 2 de 2. A transportadora já está cadastrada; falta o que permite voltar a "
+      + "entrar se este computador falhar."),
     passo.elemento));
-  passo.pronto.then(async (gerada) => {
-    try {
-      await registrarRecuperacao(gerada);
-      avisar("Chave de recuperação registrada. Guarde o arquivo e a frase em lugares separados.");
-      location.hash = "#/agentes";
-    } catch (erro) {
-      avisarErro(erro);
-      location.hash = "#/seguranca";
-    }
-  }, () => {});
+  try {
+    await registrarRecuperacao(await passo.pronto);
+    avisar("Arquivo de recuperação registrado. Guarde o arquivo e a frase em lugares separados.");
+    return true;
+  } catch (erro) {
+    avisarErro(erro);
+    return false;
+  }
 }
 
 // ---------- aba Segurança ----------
@@ -156,16 +169,16 @@ export async function telaSeguranca() {
   const resumo = await api.obter("/organizacao");
   const { chave_atual: atual, recuperacao, historico_chaves: historico } = resumo;
   const secao = h("section", {}, cabecalho("Segurança",
-    "As chaves da organização. A principal fica só neste navegador; a de recuperação, "
-    + "cifrada no arquivo que você guardou."));
+    "O acesso da transportadora fica guardado neste computador; o arquivo de recuperação, "
+    + "com você, protegido pela frase-senha."));
 
   const area = h("div", {});
   const gerar = h("button", { type: "button", class: "botao primario" },
-    recuperacao ? "Gerar nova chave de recuperação" : "Criar chave de recuperação");
+    recuperacao ? "Gerar novo arquivo de recuperação" : "Criar arquivo de recuperação");
   gerar.addEventListener("click", async () => {
     if (recuperacao) {
       const ok = await confirmar({
-        titulo: "Gerar nova chave de recuperação",
+        titulo: "Gerar novo arquivo de recuperação",
         corpo: ["O arquivo de recuperação atual e a frase dele deixam de valer.",
                 "Você vai baixar um arquivo novo e anotar uma frase nova."],
         botao: "Gerar nova",
@@ -177,7 +190,9 @@ export async function telaSeguranca() {
     limpar(area).append(passo.elemento);
     try {
       await registrarRecuperacao(await passo.pronto);
-      avisar("Nova chave de recuperação registrada. O arquivo anterior não vale mais.");
+      avisar(recuperacao
+        ? "Novo arquivo de recuperação registrado. O arquivo anterior e a frase dele não valem mais."
+        : "Arquivo de recuperação registrado. Guarde o arquivo e a frase em lugares separados.");
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     } catch (erro) {
       avisarErro(erro);
@@ -187,24 +202,25 @@ export async function telaSeguranca() {
 
   anexar(secao, [
     recuperacao ? null : h("div", { class: "caixa alerta" },
-      h("p", {}, h("strong", {}, "A organização não tem chave de recuperação."),
-        " Se a chave deste navegador se perder, não haverá como recuperá-la.")),
+      h("p", {}, h("strong", {}, "A transportadora ainda não tem arquivo de recuperação."),
+        " Sem ele, se você trocar de computador ou o navegador for limpo, perde o acesso à "
+        + "conta da transportadora.")),
     h("div", { class: "lista-cartoes" },
       h("article", { class: "cartao" },
-        h("h2", {}, "Chaves"),
+        h("h2", {}, "Acesso"),
         h("dl", { class: "dados" },
-          h("dt", {}, "Chave principal"), h("dd", {}, mono(atual.chave_id)),
-          h("dt", {}, "Chave de recuperação"),
-          h("dd", {}, recuperacao ? mono(recuperacao.chave_id) : "nenhuma")),
+          h("dt", {}, "Acesso deste computador"), h("dd", {}, mono(atual.chave_id)),
+          h("dt", {}, "Arquivo de recuperação"),
+          h("dd", {}, recuperacao ? mono(recuperacao.chave_id) : "não criado")),
         h("div", { class: "acoes" }, gerar)),
       area,
       h("article", { class: "cartao" },
-        h("h2", {}, "Histórico de chaves"),
-        historico.length === 0 ? h("p", { class: "ajuda" }, "Chave original, sem eventos de chave.")
+        h("h2", {}, "Histórico de acesso"),
+        historico.length === 0 ? h("p", { class: "ajuda" }, "Acesso original, sem mudanças.")
           : h("table", {},
             h("thead", {}, h("tr", {}, ["Evento", "Registro", "Situação"].map((t) => h("th", {}, t)))),
             h("tbody", {}, historico.map((e) => h("tr", {},
-              h("td", {}, e.evento), h("td", {}, mono(`#${e.seq}`)),
+              h("td", {}, EVENTOS_DE_ACESSO[e.evento] ?? e.evento), h("td", {}, mono(`#${e.seq}`)),
               h("td", { class: e.valido ? "ok" : "falha" },
                 e.valido ? "OK" : `FALHA: ${e.motivo}`)))))))]);
   return secao;
@@ -239,8 +255,8 @@ export async function telaRecuperar(conteudo) {
   const botao = h("button", { type: "submit", class: "botao primario" }, "Abrir arquivo");
   const form = h("form", { class: "formulario cartao" },
     h("h2", {}, "1. Abrir o arquivo de recuperação"),
-    h("p", { class: "ajuda" }, "O arquivo é aberto aqui, no navegador. Nem ele nem a frase "
-      + "vão para o servidor."),
+    h("p", { class: "ajuda" }, "O arquivo é aberto aqui, neste computador. Nem ele nem a frase "
+      + "são enviados ao Elo."),
     campo("Arquivo de recuperação (.json)", arquivo),
     campo("Frase-senha", frase, "25 letras e números, em 5 grupos."),
     erro,
@@ -268,9 +284,9 @@ export async function telaRecuperar(conteudo) {
     });
   });
 
-  return h("section", {}, cabecalho("Recuperar a chave da organização",
-    "Para quando a chave deste navegador se perdeu ou você está em outro computador. "
-    + "A organização ganha uma chave principal nova e uma chave de recuperação nova."),
+  return h("section", {}, cabecalho("Recuperar o acesso da transportadora",
+    "Para quando o acesso deste computador se perdeu ou você está em outro computador. "
+    + "O acesso antigo deixa de funcionar e você recebe um novo arquivo de recuperação."),
   form);
 }
 
@@ -279,21 +295,21 @@ function continuarRecuperacao(conteudo, aberto) {
   const passo = passoArquivoRecuperacao({ cnpj });
   const revogar = h("input", { type: "checkbox", checked: true, name: "revogar" });
   const trocar = h("button", { type: "button", class: "botao perigo" },
-    "Trocar a chave da organização");
+    "Recuperar o acesso");
   const erro = h("div", {});
   const final = h("section", { class: "cartao formulario", hidden: true },
-    h("h2", {}, "3. Trocar a chave"),
+    h("h2", {}, "3. Recuperar o acesso"),
     h("label", { class: "confirmacao" }, revogar,
       h("span", {}, "Revogar todos os mandatos ativos (recomendado). ",
-        h("span", { class: "ajuda" }, "Se a chave antiga pode ter sido roubada, e não só "
-          + "perdida, os agentes não continuam autorizados por mandatos que ela assinou. "
-          + "Depois, emita mandatos novos."))),
+        h("span", { class: "ajuda" }, "Se o acesso antigo pode ter caído em mãos erradas, e não "
+          + "só se perdido, os agentes deixam de estar autorizados pelo que ele assinou. "
+          + "Depois, dê mandatos novos."))),
     erro,
     h("div", { class: "acoes" }, trocar));
 
   limpar(conteudo).append(h("section", {},
-    cabecalho("Recuperar a chave da organização", `Organização ${cnpj}. Arquivo aberto.`),
-    h("h2", { class: "etapa" }, "2. Nova chave de recuperação"),
+    cabecalho("Recuperar o acesso da transportadora", `Transportadora ${cnpj}. Arquivo aberto.`),
+    h("h2", { class: "etapa" }, "2. Novo arquivo de recuperação"),
     h("p", { class: "ajuda" }, "O arquivo que você usou deixa de valer depois da troca. "
       + "Guarde o novo antes de continuar."),
     passo.elemento, final));
@@ -337,7 +353,7 @@ function continuarRecuperacao(conteudo, aberto) {
         api.definirRazaoSocial(cadastro.razao_social);
         let revogados = 0;
         if (revogar.checked) revogados = await revogarMandatosAtivos();
-        avisar("Chave da organização trocada. A chave antiga não entra nem assina mais."
+        avisar("Acesso recuperado. O acesso antigo não funciona mais."
           + (revogar.checked ? ` ${revogados} mandato(s) revogado(s).` : ""));
         location.hash = "#/mandatos";
       } catch (e) {
@@ -353,8 +369,8 @@ function continuarRecuperacao(conteudo, aberto) {
 /** Na tela de entrada: a chave guardada aqui já não é a da organização? */
 export function mensagemChaveAntiga(erro) {
   if (erro?.status === 401 && /não confere/.test(erro.message)) {
-    return "A chave guardada neste navegador não é mais a chave da organização: ela foi "
-      + "trocada por uma recuperação. Para entrar aqui, use o arquivo de recuperação.";
+    return "O acesso guardado neste computador não vale mais: ele foi substituído numa "
+      + "recuperação. Para entrar aqui, use o arquivo de recuperação.";
   }
   return erro?.message ?? String(erro);
 }

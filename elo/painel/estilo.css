@@ -155,7 +155,9 @@ input:focus, select:focus, textarea:focus, .botao:focus-visible, a:focus-visible
 
 /* ---------- avisos e diálogo ---------- */
 
-#avisos { position: fixed; bottom: 20px; right: 20px; display: grid; gap: 8px; z-index: 10; max-width: min(440px, calc(100vw - 40px)); }
+/* no fluxo da página, logo abaixo do topo: empurra o conteúdo, nunca cobre botões */
+#avisos { width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px 20px 0; display: grid; gap: 8px; }
+#avisos:empty { display: none; }
 .aviso {
   display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
   border-radius: var(--raio); padding: 12px 14px; box-shadow: 0 4px 14px rgba(0, 0, 0, .12); border: 1px solid;

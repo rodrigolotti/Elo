@@ -258,6 +258,9 @@ e do embarcador. No caminho, confere:
 
 - se a chave no IndexedDB está como `extractable: false`;
 - se a confirmação da frase-senha recusa grupos errados;
+- se o passo 2 do cadastro esconde o menu e pede confirmação para sair, mantendo a
+  mesma frase-senha quando a pessoa escolhe continuar;
+- se algum aviso fica em cima de um botão (conferido a cada captura de tela);
 - a recuperação num "outro computador" (um segundo contexto do navegador, com
   IndexedDB próprio): frase errada mostra a mensagem na tela, os mandatos ficam
   revogados, uma oferta nova com eles sai do mandato, os compromissos antigos

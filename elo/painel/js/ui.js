@@ -15,6 +15,9 @@ export function avisar(texto, tipo = "ok") {
                   onclick: () => aviso.remove() }, "×"));
   avisos.append(aviso);
   while (avisos.children.length > 3) avisos.firstElementChild.remove();
+  // a faixa de avisos fica no fluxo da página (empurra o conteúdo, nunca cobre
+  // um botão); se ela estiver fora da tela, rola até ela
+  if (avisos.getBoundingClientRect().bottom < 0) avisos.scrollIntoView({ behavior: "smooth" });
   setTimeout(() => aviso.remove(), tipo === "ok" ? 5000 : 10000);
 }
 
@@ -27,7 +30,8 @@ export function avisarErro(erro) {
  * Abre um diálogo de confirmação. `campos` são elementos extras (ex.: motivo).
  * Resolve true se a pessoa confirmar.
  */
-export function confirmar({ titulo, corpo, botao, perigo = false, campos = [] }) {
+export function confirmar({ titulo, corpo, botao, perigo = false, campos = [],
+                            cancelar = "Cancelar" }) {
   return new Promise((resolve) => {
     const form = h("form", { method: "dialog", class: "dialogo-corpo" },
       h("h2", {}, titulo),
@@ -35,7 +39,7 @@ export function confirmar({ titulo, corpo, botao, perigo = false, campos = [] })
       ...campos,
       h("div", { class: "acoes" },
         h("button", { type: "button", class: "botao secundario",
-                      onclick: () => dialogo.close("nao") }, "Cancelar"),
+                      onclick: () => dialogo.close("nao") }, cancelar),
         h("button", { type: "submit", value: "sim",
                       class: `botao ${perigo ? "perigo" : "primario"}` }, botao)));
     limpar(dialogo).append(form);
@@ -46,11 +50,11 @@ export function confirmar({ titulo, corpo, botao, perigo = false, campos = [] })
   });
 }
 
-/** Desabilita o botão enquanto a ação roda, para não assinar duas vezes. */
+/** Desabilita o botão enquanto a ação roda, para não registrar duas vezes. */
 export async function executando(botao, acao) {
   const texto = botao.textContent;
   botao.disabled = true;
-  botao.textContent = "Assinando…";
+  botao.textContent = "Registrando…";
   try {
     return await acao();
   } finally {
