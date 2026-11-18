@@ -161,3 +161,33 @@ def test_linha_de_comando_sem_api_no_ar(tmp_path):
                        cwd=RAIZ, capture_output=True, timeout=60)
     assert r.returncode == 1
     assert "não consegui falar com a API" in r.stderr.decode("utf-8")
+
+
+# ---------- embarcador fictício (nunca a própria transportadora) ----------
+
+def test_embarcador_padrao_nunca_e_a_transportadora():
+    for cnpj, _ in sim.EMBARCADORES:
+        escolhido, nome = sim.escolher_embarcador(cnpj)
+        assert escolhido != cnpj and "fictícia" in nome
+    assert len({c for c, _ in sim.EMBARCADORES}) == 2
+    with pytest.raises(sim.ErroSimulador, match="outra empresa"):
+        sim.escolher_embarcador(CNPJ_TRANSP, CNPJ_TRANSP)
+
+
+def test_oferta_leva_o_nome_do_embarcador_e_o_aceite_usa_quem_recebeu(painel, sessao_painel):
+    outro, _ = sim.EMBARCADORES[1]
+    r = sim.emitir_oferta(painel["cliente"], cnpj=CNPJ_TRANSP, mandato=painel["mandato_id"],
+                          valor="4850", agente=painel["agente_id"], pasta=painel["pasta"],
+                          embarcador=outro)
+    assert r["embarcador"] == outro and r["embarcador_nome"].startswith("Distribuidora Exemplo")
+    [item] = painel["cliente"].get("/ofertas", headers=sessao_painel).json()
+    assert item["embarcador"]["nome"] == r["embarcador_nome"]
+    cp = sim.aceitar(painel["cliente"], oferta=r["oferta"]["id"], token=r["token"],
+                     pasta=painel["pasta"])  # sem --embarcador: usa o lembrado
+    assert cp["aceite"]["cnpj"] == outro
+
+
+@pytest.fixture
+def sessao_painel(painel):
+    from test_api_painel import entrar
+    return entrar(painel["cliente"], painel["chave_org"])

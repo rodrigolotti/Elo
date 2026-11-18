@@ -36,19 +36,47 @@ from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
 from elo.chaves import ParDeChaves  # noqa: E402
-from elo.cnpj import formatar_cnpj, validar_cnpj  # noqa: E402
+from elo.cnpj import calcular_digitos, formatar_cnpj, validar_cnpj  # noqa: E402
 from elo.mandato import reais  # noqa: E402
 
 PASTA_PADRAO = RAIZ / "chaves_locais"  # no .gitignore
 ARQUIVO_CHAVE = "agente.json"
 CHAVE_ID_PADRAO = "agente-simulado#k1"
-# CNPJ de exemplo dos testes (não sorteado, para não cair num número de empresa real)
-EMBARCADOR_PADRAO = "22.333.444/0001-81"
 BRT = timezone(timedelta(hours=-3))
 
 
 class ErroSimulador(Exception):
     """Erro com mensagem para mostrar a quem está testando."""
+
+
+def _cnpj_exemplo(base12: str) -> str:
+    return formatar_cnpj(base12 + calcular_digitos(base12))
+
+
+# Embarcadores fictícios, com CNPJs de exemplo (sequências de documentação, não
+# sorteados, para não cair no número de uma empresa real). O simulador usa o
+# primeiro que não for a própria transportadora.
+EMBARCADORES = [
+    (_cnpj_exemplo("223334440001"), "Comercial Exemplo de Alimentos Ltda (fictícia)"),
+    (_cnpj_exemplo("334445550001"), "Distribuidora Exemplo S.A. (fictícia)"),
+]
+EMBARCADOR_PADRAO = EMBARCADORES[0][0]
+
+
+def escolher_embarcador(cnpj_transportadora: str, cnpj: str | None = None,
+                        nome: str | None = None) -> tuple[str, str]:
+    """(CNPJ, nome) do embarcador fictício, sempre diferente da transportadora."""
+    transportadora = formatar_cnpj(cnpj_transportadora)
+    if cnpj:
+        if not validar_cnpj(cnpj):
+            raise ErroSimulador(f"CNPJ do embarcador inválido: {cnpj}")
+        if formatar_cnpj(cnpj) == transportadora:
+            raise ErroSimulador("o embarcador precisa ser outra empresa, não a própria "
+                                f"transportadora ({transportadora})")
+        conhecido = dict(EMBARCADORES).get(formatar_cnpj(cnpj))
+        return formatar_cnpj(cnpj), nome or conhecido or "Embarcador fictício"
+    cnpj_escolhido, nome_padrao = next((c, n) for c, n in EMBARCADORES if c != transportadora)
+    return cnpj_escolhido, nome or nome_padrao
 
 
 # ---------- utilidades ----------
@@ -115,7 +143,8 @@ def criar_chave(pasta: Path = PASTA_PADRAO, chave_id: str = CHAVE_ID_PADRAO,
 
 def emitir_oferta(cliente: Any, *, cnpj: str, mandato: str, valor: str,
                   agente: str | None = None, pasta: Path = PASTA_PADRAO,
-                  embarcador: str = EMBARCADOR_PADRAO, origem: str = "SP",
+                  embarcador: str | None = None, embarcador_nome: str | None = None,
+                  origem: str = "SP",
                   destino: str = "PR", tipo: str = "carga geral", peso_kg: int = 3200,
                   volume_litros: int = 14500) -> dict[str, Any]:
     """Registra o pedido do embarcador fictício e emite a oferta assinada pelo agente."""
@@ -127,9 +156,11 @@ def emitir_oferta(cliente: Any, *, cnpj: str, mandato: str, valor: str,
         raise ErroSimulador("informe --agente na primeira oferta: é o ID do agente na tela "
                             "Agentes do painel (começa com ag_)")
     centavos = centavos_de_reais(valor)
+    embarcador, embarcador_nome = escolher_embarcador(cnpj, embarcador, embarcador_nome)
 
     pedido = _resposta(cliente.post("/pedidos", json={
-        "cnpj_solicitante": embarcador, "canal": "simulador",
+        "cnpj_solicitante": embarcador, "nome_solicitante": embarcador_nome,
+        "canal": "simulador",
         "mensagem_original": "Pedido de cotação gerado por scripts/simular_agente.py",
         "carga": {"origem_cep": "01000-000", "origem_uf": origem.upper(),
                   "destino_cep": "80000-000", "destino_uf": destino.upper(),
@@ -152,17 +183,24 @@ def emitir_oferta(cliente: Any, *, cnpj: str, mandato: str, valor: str,
         raise ErroSimulador("a API devolveu um rascunho diferente do pedido; nada foi assinado")
     emitida = _resposta(cliente.post("/ofertas", json=_par(dados).assinar(rascunho)))
 
-    if dados.get("agente_id") != agente_id:  # lembra o agente para as próximas ofertas
-        dados["agente_id"] = agente_id
-        _arquivo(pasta).write_text(json.dumps(dados, indent=2) + "\n", encoding="utf-8")
+    # lembra o agente (próximas ofertas) e o embarcador de cada oferta (aceite)
+    dados["agente_id"] = agente_id
+    dados.setdefault("embarcador_da_oferta", {})[emitida["oferta"]["id"]] = embarcador
+    _arquivo(pasta).write_text(json.dumps(dados, indent=2) + "\n", encoding="utf-8")
     return {"oferta": emitida["oferta"], "status": emitida["status"],
             "violacoes": emitida["violacoes"], "token": emitida["token_aceite"],
-            "embarcador": embarcador}
+            "embarcador": embarcador, "embarcador_nome": embarcador_nome}
 
 
-def aceitar(cliente: Any, *, oferta: str, token: str,
-            embarcador: str = EMBARCADOR_PADRAO) -> dict[str, Any]:
-    """Aceita a oferta como o embarcador fictício."""
+def aceitar(cliente: Any, *, oferta: str, token: str, embarcador: str | None = None,
+            pasta: Path = PASTA_PADRAO) -> dict[str, Any]:
+    """Aceita a oferta como o embarcador fictício (o que recebeu a oferta)."""
+    if embarcador is None:
+        try:
+            embarcador = _ler_chave(pasta).get("embarcador_da_oferta", {}).get(oferta)
+        except ErroSimulador:
+            embarcador = None
+        embarcador = embarcador or EMBARCADOR_PADRAO
     try:
         return _resposta(cliente.post(f"/ofertas/{oferta}/aceite", json={
             "token": token, "cnpj": embarcador, "nome": "Compras (embarcador fictício)",
@@ -196,7 +234,9 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     oferta.add_argument("--mandato", required=True, help="ID do mandato (tela Mandatos)")
     oferta.add_argument("--valor", required=True, help="valor em reais, ex.: 4850 ou 4.850,00")
     oferta.add_argument("--agente", help="ID do agente (tela Agentes); só na primeira vez")
-    oferta.add_argument("--embarcador", default=EMBARCADOR_PADRAO, help="CNPJ do embarcador")
+    oferta.add_argument("--embarcador", help="CNPJ do embarcador fictício (padrão: um de "
+                        "exemplo, sempre diferente da transportadora)")
+    oferta.add_argument("--embarcador-nome", help="nome do embarcador fictício")
     oferta.add_argument("--origem", default="SP", help="UF de origem")
     oferta.add_argument("--destino", default="PR", help="UF de destino")
     oferta.add_argument("--tipo", default="carga geral", help="tipo de carga")
@@ -204,7 +244,7 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     aceite = comandos.add_parser("aceitar", help="aceita a oferta como o embarcador")
     aceite.add_argument("--oferta", required=True, help="ID da oferta (of_...)")
     aceite.add_argument("--token", required=True, help="token de aceite mostrado na oferta")
-    aceite.add_argument("--embarcador", default=EMBARCADOR_PADRAO, help="CNPJ do embarcador")
+    aceite.add_argument("--embarcador", help="CNPJ do embarcador (padrão: o que recebeu a oferta)")
     return raiz.parse_args(argv)
 
 
@@ -230,12 +270,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.comando == "oferta":
                 r = emitir_oferta(cliente, cnpj=args.cnpj, mandato=args.mandato,
                                   valor=args.valor, agente=args.agente, pasta=args.pasta,
-                                  embarcador=args.embarcador, origem=args.origem,
+                                  embarcador=args.embarcador,
+                                  embarcador_nome=args.embarcador_nome, origem=args.origem,
                                   destino=args.destino, tipo=args.tipo)
                 o = r["oferta"]
+                print(f"Embarcador fictício: {r['embarcador_nome']} ({r['embarcador']}), "
+                      f"outra empresa que não a transportadora {formatar_cnpj(args.cnpj)}.")
                 print(f"Oferta {o['id']}: {reais(o['condicoes']['valor_centavos'])}, "
-                      f"{o['carga']['origem_uf']} → {o['carga']['destino_uf']}, "
-                      f"para o embarcador {r['embarcador']}.")
+                      f"{o['carga']['origem_uf']} → {o['carga']['destino_uf']}.")
                 if r["status"] == "enviada":
                     print("Dentro do mandato: já está com o embarcador.")
                 else:
@@ -249,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
                       f"--token {r['token']}")
             else:
                 cp = aceitar(cliente, oferta=args.oferta, token=args.token,
-                             embarcador=args.embarcador)
+                             embarcador=args.embarcador, pasta=args.pasta)
                 print(f"Oferta aceita. Compromisso {cp['id']}.")
                 print(f"Verifique em: {args.url.rstrip('/')}/verificar/{cp['id']}")
         return 0
