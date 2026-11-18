@@ -89,12 +89,18 @@ def test_todos_os_imports_e_referencias_existem():
 
 
 def test_chave_privada_so_e_criada_nao_exportavel():
-    # toda geração de chave no painel passa false em "extractable"
+    # toda geração de chave no painel passa false em "extractable", com UMA
+    # exceção: a chave de recuperação, que precisa sair cifrada para o arquivo
     for arquivo in ARQUIVOS_JS:
-        for chamada in re.findall(r"generateKey\(([^)]*)\)", arquivo.read_text(encoding="utf-8")):
+        texto = arquivo.read_text(encoding="utf-8")
+        if arquivo.name == "recuperacao.js":
+            assert len(re.findall(r"generateKey\(", texto)) == 1
+            assert texto.count('exportKey("pkcs8"') == 1
+            continue
+        for chamada in re.findall(r"generateKey\(([^)]*)\)", texto):
             assert re.search(r"\},\s*false,", chamada), f"{arquivo.name}: {chamada}"
-        assert "exportKey(\"pkcs8\"" not in arquivo.read_text(encoding="utf-8")
-        assert "exportKey(\"jwk\"" not in arquivo.read_text(encoding="utf-8")
+        assert "exportKey(\"pkcs8\"" not in texto
+        assert "exportKey(\"jwk\"" not in texto
 
 
 # ---------- funções puras, rodando no Node ----------

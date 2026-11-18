@@ -8,6 +8,9 @@
 import { createInterface } from "node:readline";
 import { canonicalizar, hashSha256 } from "../../elo/painel/js/canonico.js";
 import { assinar, chavePublicaBase64, gerarParDeChaves } from "../../elo/painel/js/assinatura.js";
+import {
+  abrirArquivoRecuperacao, criarArquivoRecuperacao, gerarFraseSenha,
+} from "../../elo/painel/js/recuperacao.js";
 
 const chaves = new Map(); // nome -> { par, chaveId }
 
@@ -38,6 +41,18 @@ const operacoes = {
     if (!/^[a-z]+\.js$/.test(modulo)) throw new Error(`módulo inválido: ${modulo}`);
     const m = await import(`../../elo/painel/js/${modulo}`);
     return { valor: await m[funcao](...args) };
+  },
+  async recuperacao_criar({ cnpj, chave_id, frase }) {
+    const usada = frase ?? gerarFraseSenha();
+    const { arquivo, chavePublica } = await criarArquivoRecuperacao({ cnpj, chaveId: chave_id }, usada);
+    return { arquivo, chave_publica: chavePublica, frase: usada };
+  },
+  // abre o arquivo e guarda a chave (não exportável) com o nome dado, como no navegador
+  async recuperacao_abrir({ nome, arquivo, frase, cnpj_esperado }) {
+    const r = await abrirArquivoRecuperacao(arquivo, frase, cnpj_esperado);
+    chaves.set(nome, { par: { privateKey: r.chavePrivada }, chaveId: r.chaveId });
+    return { chave_publica: r.chavePublica, chave_id: r.chaveId, cnpj: r.cnpj,
+             privada_extraivel: r.chavePrivada.extractable };
   },
   async assinar({ nome, objeto }) {
     const { par, chaveId } = chaves.get(nome);
