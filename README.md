@@ -270,6 +270,25 @@ As capturas de tela vão para a pasta informada. Use `CHROME` para indicar outro
 navegador e `PYTHON` para outro interpretador. Ele fica fora do `pytest` porque
 precisa de um navegador instalado.
 
+### Regenerar a captura da página de verificação
+
+A imagem do topo deste README (`docs/verificacao.png`) sai de um script:
+
+```bat
+node scripts\captura_verificacao.mjs
+```
+
+Ele sobe a API com um banco temporário e roda a demo (`demo_api.py`) com os CNPJs
+de exemplo dos testes (`11.222.333/0001-81`), em vez de sortear números que podem
+pertencer a empresas reais. Depois escolhe o compromisso que passou por aprovação
+humana e fotografa a página `/verificar` num Chrome (ou Edge) headless, com 780 px
+de largura, do topo até o fim da tabela de checagens. O script falha, sem gravar
+nada, se alguma checagem não der OK ou se o trecho fotografado mostrar outro
+CNPJ, um e-mail ou um caminho de arquivo. Sem argumento, ele grava em
+`docs/verificacao.png`; para outro lugar, passe o caminho
+(`node scripts\captura_verificacao.mjs C:\temp\teste.png`). Aceita as mesmas
+variáveis `CHROME` e `PYTHON` do roteiro acima.
+
 ### Token de aceite
 
 Ao registrar a oferta (`POST /ofertas`), a resposta traz `token_aceite`, gerado
@@ -327,6 +346,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 | `elo/painel/js/app.js`, `ui.js` | Navegação, telas do dia a dia e componentes comuns |
 | `tests/js/navegador_node.mjs` | Roda os módulos do painel no Node para os testes de compatibilidade |
 | `tests/e2e/painel_chrome.mjs` | Percorre o painel num Chrome headless |
+| `scripts/captura_verificacao.mjs` | Gera `docs/verificacao.png` com dados fictícios |
 | `demo_api.py` | Cliente de demonstração: gera as chaves localmente e chama a API |
 
 ## Decisões de projeto
