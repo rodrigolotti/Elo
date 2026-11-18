@@ -45,12 +45,11 @@ def test_lotacao_no_piso_ou_acima_nao_e_violacao(cenario):
 
 @pytest.mark.parametrize("extra", [
     {"modalidade": "fracionada", "distancia_km": 500, "eixos": 5},  # piso não vale
+    {"modalidade": "fracionada"},                                    # nem exige distância
     {"distancia_km": 500, "eixos": 5},                               # modalidade não informada
-    {"modalidade": "lotacao", "eixos": 5},                           # sem distância
-    {"modalidade": "lotacao", "distancia_km": 500},                  # sem eixos
     {},                                                              # oferta como antes
-], ids=["fracionada", "sem-modalidade", "sem-distancia", "sem-eixos", "como-antes"])
-def test_sem_lotacao_completa_nao_ha_regra_de_piso(cenario, extra):
+], ids=["fracionada", "fracionada-sem-dados", "sem-modalidade", "como-antes"])
+def test_fora_da_lotacao_nao_ha_regra_de_piso(cenario, extra):
     _, problemas, _ = emitir(cenario, condicoes(100_000, **extra))
     assert problemas == []
 
@@ -85,7 +84,7 @@ def test_campos_vao_assinados_e_oferta_sem_eles_fica_como_antes(cenario):
 def test_compromisso_abaixo_do_piso_aprovado_continua_valido(cenario):
     p = cenario["plataforma"]
     oferta, _, token = emitir(cenario, condicoes(300_000, **LOTACAO))
-    p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Ana Gestora")
+    p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Ana Gestora", JUSTIFICATIVA)
     cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
     p._reconstruir()
     relatorio = p.verificar_compromisso(cp["id"])
@@ -166,3 +165,107 @@ def test_frete_com_distancia_estimada_pelo_cep(api, sessao):
 def test_frete_explica_quando_nao_ha_piso(api, sessao, extra, motivo):
     frete = _pendente(api, sessao, 900_000, **extra)
     assert frete["piso"] is None and motivo in frete["sem_piso"]
+
+
+# ---------- protocolo 0.2: lotação sem distância ou eixos vai para aprovação ----------
+
+from elo.mandato import SEM_DISTANCIA, SEM_EIXOS  # noqa: E402
+from elo.servico import ErroElo  # noqa: E402
+
+
+@pytest.mark.parametrize("extra, motivos", [
+    ({"modalidade": "lotacao", "eixos": 5}, [SEM_DISTANCIA]),
+    ({"modalidade": "lotacao", "distancia_km": 500}, [SEM_EIXOS]),
+    ({"modalidade": "lotacao"}, [SEM_DISTANCIA, SEM_EIXOS]),
+], ids=["sem-distancia", "sem-eixos", "sem-nenhum"])
+def test_lotacao_sem_distancia_ou_eixos_vai_para_aprovacao(cenario, extra, motivos):
+    oferta, problemas, _ = emitir(cenario, condicoes(485_000, **extra))
+    assert problemas == motivos
+    assert oferta["versao_protocolo"] == "0.2"
+    assert cenario["plataforma"].status_oferta[oferta["id"]] == "aguardando_aprovacao"
+    assert SEM_DISTANCIA == "distância não informada: não foi possível conferir o piso da ANTT"
+
+
+def test_oferta_0_1_sem_distancia_continua_valida(cenario, monkeypatch):
+    """A regra nova não alcança ofertas emitidas antes dela (protocolo 0.1)."""
+    import elo.servico
+    p = cenario["plataforma"]
+    monkeypatch.setattr(elo.servico, "VERSAO_PROTOCOLO", "0.1")
+    oferta, problemas, token = emitir(cenario, condicoes(485_000, modalidade="lotacao", eixos=5))
+    monkeypatch.undo()
+    assert oferta["versao_protocolo"] == "0.1" and problemas == []
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+    p._reconstruir()
+    assert p.verificar_compromisso(cp["id"]).valido
+
+
+# ---------- aprovar abaixo do piso exige justificativa assinada ----------
+
+JUSTIFICATIVA = "Cliente estratégico; diferença coberta pelo contrato anual de 2026."
+
+
+def test_aprovar_abaixo_do_piso_exige_justificativa(cenario):
+    p = cenario["plataforma"]
+    oferta, _, _ = emitir(cenario, condicoes(300_000, **LOTACAO))
+    for curta in ("", "   ", "porque si"):
+        with pytest.raises(ErroElo, match="escreva a justificativa"):
+            p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Ana", curta)
+    aprovacao = p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Ana", JUSTIFICATIVA)
+    assert aprovacao["justificativa"] == JUSTIFICATIVA
+    chave = p._chave_atual(CNPJ_TRANSP).chave_publica
+    assert verificar_assinatura(aprovacao, chave)
+    assert not verificar_assinatura({**aprovacao, "justificativa": "outra"}, chave)
+
+
+def test_justificativa_aparece_na_verificacao(cenario):
+    p = cenario["plataforma"]
+    oferta, _, token = emitir(cenario, condicoes(300_000, **LOTACAO))
+    p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Ana Gestora", JUSTIFICATIVA)
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+    autorizada = next(v for v in p.verificar_compromisso(cp["id"]).verificacoes
+                      if v.nome == "Oferta autorizada")
+    assert autorizada.ok and f"justificativa: {JUSTIFICATIVA}" in autorizada.detalhe
+
+
+def test_aprovacao_sem_justificativa_gravada_por_fora_falha_na_verificacao(cenario):
+    from elo.canonico import hash_sha256
+    p = cenario["plataforma"]
+    oferta, _, token = emitir(cenario, condicoes(300_000, **LOTACAO))
+    p._incluir("oferta_aprovada", cenario["chave_org"].assinar({
+        "tipo": "aprovacao", "oferta_hash": hash_sha256(oferta), "aprovado_por": "Alguém",
+        "em": p._agora_iso()}), oferta["id"])
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+    autorizada = next(v for v in p.verificar_compromisso(cp["id"]).verificacoes
+                      if v.nome == "Oferta autorizada")
+    assert not autorizada.ok
+    assert "abaixo do piso da ANTT e sem justificativa" in autorizada.detalhe
+
+
+def test_aprovacao_comum_nao_exige_justificativa(cenario):
+    p = cenario["plataforma"]
+    oferta, problemas, _ = emitir(cenario, condicoes(900_000, **LOTACAO))  # só acima do limite
+    assert problemas and not any(x.startswith(AVISO_PISO) for x in problemas)
+    aprovacao = p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Ana")
+    assert "justificativa" not in aprovacao
+
+
+def test_api_aprovacao_abaixo_do_piso(api):
+    from test_api import assinar_e_enviar
+    corpo = corpo_oferta(api, valor=300_000)
+    corpo["condicoes"] = {**corpo["condicoes"], **LOTACAO}
+    c = api["cliente"]
+    rascunho = c.post("/ofertas/rascunho", json=corpo).json()["rascunho"]
+    oferta_id = c.post("/ofertas", json=api["chave_agente"].assinar(rascunho)).json()["oferta"]["id"]
+    r = c.post(f"/ofertas/{oferta_id}/aprovacao/rascunho", json={"aprovado_por": "Ana"})
+    assert r.status_code == 400 and "escreva a justificativa" in r.json()["detail"]
+    _, r = assinar_e_enviar(c, f"/ofertas/{oferta_id}/aprovacao/rascunho",
+                            {"aprovado_por": "Ana", "justificativa": JUSTIFICATIVA},
+                            api["chave_org"], f"/ofertas/{oferta_id}/aprovacao")
+    assert r.status_code == 201 and r.json()["justificativa"] == JUSTIFICATIVA
+
+
+def test_api_lotacao_sem_distancia_preve_aprovacao(api):
+    corpo = corpo_oferta(api)
+    corpo["condicoes"] = {**corpo["condicoes"], "modalidade": "lotacao", "eixos": 5}
+    r = api["cliente"].post("/ofertas/rascunho", json=corpo).json()
+    assert r["status_previsto"] == "aguardando_aprovacao" and r["violacoes"] == [SEM_DISTANCIA]

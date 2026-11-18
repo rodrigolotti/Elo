@@ -74,7 +74,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 366 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 375 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -284,7 +284,8 @@ python scripts\simular_agente.py aceitar --oferta of_... --token ...
   ignora. Para trocar de agente, `chave --substituir`.
 - Piso da ANTT: a oferta vai como carga lotação com 5 eixos (`--modalidade`, `--eixos`).
   Com `--distancia 500`, o piso usa a distância do agente e uma oferta abaixo dele vai
-  para Aprovações. Sem `--distancia`, o painel estima pelo CEP.
+  para Aprovações. Sem `--distancia`, a oferta de lotação também vai para Aprovações
+  ("distância não informada"), e o painel mostra a estimativa por CEP como apoio.
 - Outras opções: `--url` (padrão `http://127.0.0.1:8000`), `--embarcador`,
   `--origem`, `--destino` e `--tipo` (categoria da ANTT). Veja
   `python scripts\simular_agente.py oferta --help`.
@@ -318,6 +319,18 @@ de tipos de carga do pedido e do mandato.
 `eixos` (2, 3, 4, 5, 6, 7 ou 9) entram nas condições da oferta assinada. A regra do
 mandato e a verificação usam **só** esses dados assinados e a tabela vigente na data
 de emissão da oferta, então um reajuste da ANTT não muda compromissos antigos.
+
+**Sem brecha (protocolo 0.2).** Em lotação, a oferta precisa trazer distância e
+eixos. Sem eles, vai para aprovação com o motivo "distância não informada: não foi
+possível conferir o piso da ANTT" (ou "eixos não informados…"), e o cartão mostra a
+estimativa por CEP como apoio. A regra vale para ofertas emitidas no protocolo 0.2 em
+diante. A versão vai assinada na oferta, então as de 0.1 continuam verificadas pelas
+regras com que foram emitidas.
+
+**Aprovar abaixo do piso exige justificativa.** O diálogo pede uma justificativa
+escrita (pelo menos 10 caracteres), que vai **assinada junto com a aprovação**. Na
+verificação, uma oferta 0.2 abaixo do piso aprovada sem justificativa faz falhar a
+checagem "Oferta autorizada". Com justificativa, ela aparece no detalhe da checagem.
 
 **A conta.** `piso = distância × CCD + CC`, em inteiros: CCD em décimos de milésimo
 de real por km, CC e o piso em centavos, arredondados meio para cima.
@@ -435,7 +448,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - Login no painel por desafio assinado com a chave da organização. As consultas exigem sessão e mostram só os dados da própria organização.
 - Painel web da transportadora em `/painel`: cadastro, agentes, mandatos com revogação, fila de aprovação e histórico, com a chave da organização só no navegador.
 - Chave de recuperação em arquivo cifrado (PBKDF2-HMAC-SHA256 com 600.000 iterações + AES-256-GCM) e troca da chave principal registrada no protocolo, com histórico de chaves verificado na 15ª checagem.
-- Piso mínimo da ANTT (Tabela A, carga lotação) com a tabela oficial versionada por vigência. Oferta de lotação abaixo do piso vai para aprovação com aviso forte. A fila mostra distância (do agente ou estimada pelo CEP), valor por km, piso e folga.
+- Piso mínimo da ANTT (Tabela A, carga lotação) com a tabela oficial versionada por vigência. Oferta de lotação abaixo do piso, ou sem distância ou eixos, vai para aprovação. Aprovar abaixo do piso exige justificativa assinada. A fila mostra, numa caixa só, os motivos e os dados do frete: distância (do agente ou estimada pelo CEP), valor por km, piso e folga.
 - Tipos de carga do pedido e do mandato na lista das 12 categorias da ANTT. Os dados antigos em texto livre continuam valendo.
 
 ## Estrutura

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from . import VERSAO_PROTOCOLO
+from . import VERSAO_PROTOCOLO, versao_ao_menos
 from .canonico import ErroCanonico, hash_sha256
 from .chaves import ParDeChaves, chave_publica_valida, verificar_assinatura
 from .cnpj import formatar_cnpj, validar_cnpj
@@ -39,7 +39,10 @@ def _descrever_tipo(tipo: str) -> dict[str, Any]:
     """Para exibir: nome da categoria da ANTT, ou o texto antigo fora da lista."""
     return {"tipo": tipo, "nome": nome_tipo_carga(tipo),
             "na_lista": normalizar_tipo_carga(tipo) is not None}
-from .mandato import violacoes
+from .mandato import abaixo_do_piso, violacoes
+
+MINIMO_JUSTIFICATIVA = 10
+"""Caracteres mínimos da justificativa para aprovar frete abaixo do piso."""
 from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
 from .registro import Registro
 
@@ -660,7 +663,7 @@ class Plataforma:
         carga = Carga(**pedido["carga"])
         problemas = violacoes(
             LimitesMandato(**mandato["limites"]), carga, condicoes, agora,
-            self.revogacoes.get(mandato_id, {}).get("em"),
+            self.revogacoes.get(mandato_id, {}).get("em"), VERSAO_PROTOCOLO,
         )
         oferta = {
             "tipo": "oferta",
@@ -713,9 +716,17 @@ class Plataforma:
         payload = self.registrar_assinado(chave_agente.assinar(rascunho), "oferta")
         return payload["oferta"], payload["violacoes"], payload["token_aceite"]
 
-    def preparar_aprovacao(self, oferta_id: str, aprovado_por: str) -> dict[str, Any]:
+    def preparar_aprovacao(self, oferta_id: str, aprovado_por: str,
+                           justificativa: str = "") -> dict[str, Any]:
+        """Aprovação humana. Oferta abaixo do piso da ANTT exige justificativa
+        escrita, que vai assinada junto com a aprovação."""
         oferta = self._oferta(oferta_id)
         org = self._org(oferta["emissor"]["cnpj"])
+        justificativa = justificativa.strip()
+        if (abaixo_do_piso(self.violacoes_oferta.get(oferta_id, []))
+                and len(justificativa) < MINIMO_JUSTIFICATIVA):
+            raise ErroElo("frete abaixo do piso mínimo da ANTT: para aprovar, escreva a "
+                          f"justificativa (pelo menos {MINIMO_JUSTIFICATIVA} caracteres)")
 
         def revalidar() -> None:
             if self.status_oferta[oferta_id] != "aguardando_aprovacao":
@@ -728,16 +739,18 @@ class Plataforma:
             "oferta_hash": hash_sha256(oferta),
             "aprovado_por": aprovado_por,
             "em": self._agora_iso(),
+            # só quando há: aprovação sem justificativa fica no formato de antes
+            **({"justificativa": justificativa} if justificativa else {}),
         }
         return self._guardar_rascunho("aprovacao", "oferta_aprovada", aprovacao,
                                       oferta_id, self._chave_atual(org["cnpj"]).chave_publica,
                                       revalidar)
 
     def aprovar_oferta(self, oferta_id: str, chave_org: ParDeChaves,
-                       aprovado_por: str) -> dict[str, Any]:
+                       aprovado_por: str, justificativa: str = "") -> dict[str, Any]:
         oferta = self._oferta(oferta_id)
         self._exigir_chave_da_org(self._org(oferta["emissor"]["cnpj"]), chave_org)
-        rascunho = self.preparar_aprovacao(oferta_id, aprovado_por)
+        rascunho = self.preparar_aprovacao(oferta_id, aprovado_por, justificativa)
         return self.registrar_assinado(chave_org.assinar(rascunho), "aprovacao")
 
     def preparar_recusa(self, oferta_id: str, recusado_por: str,
@@ -882,6 +895,7 @@ class Plataforma:
                 # revogação registrada depois da oferta não a torna irregular
                 self.revogacoes.get(mandato["id"], {}).get("em")
                 if self.revogado_na_emissao.get(oferta_id) else None,
+                oferta.get("versao_protocolo"),
             )
             aprovacao = self.aprovacoes.get(oferta_id)
             recusa = self.recusas.get(oferta_id)
@@ -893,14 +907,23 @@ class Plataforma:
             elif not problemas:
                 r.checar("Oferta autorizada", True, "dentro do mandato")
             elif aprovacao is not None:
+                justificativa = str(aprovacao.get("justificativa", "")).strip()
+                # protocolo 0.2: aprovar abaixo do piso exige justificativa assinada
+                sem_justificativa = (abaixo_do_piso(problemas)
+                                     and versao_ao_menos(oferta.get("versao_protocolo"), "0.2")
+                                     and len(justificativa) < MINIMO_JUSTIFICATIVA)
                 aprov_ok = (self._assinado_pela_org(aprovacao, org["cnpj"], "aprovacao",
                                                     oferta_id)
                             and aprovacao["oferta_hash"] == cp["oferta_hash"]
                             and ler_momento(aprovacao["em"])
-                            <= ler_momento(cp["aceite"]["em"]))
+                            <= ler_momento(cp["aceite"]["em"])
+                            and not sem_justificativa)
                 r.checar("Oferta autorizada", aprov_ok,
                          f"fora do mandato ({'; '.join(problemas)}), aprovada por "
-                         f"{aprovacao['aprovado_por']}")
+                         f"{aprovacao['aprovado_por']}"
+                         + (f"; justificativa: {justificativa}" if justificativa else "")
+                         + ("; abaixo do piso da ANTT e sem justificativa"
+                            if sem_justificativa else ""))
             else:
                 r.checar("Oferta autorizada", False,
                          f"fora do mandato e sem aprovação: {'; '.join(problemas)}")

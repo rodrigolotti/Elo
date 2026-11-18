@@ -52,8 +52,9 @@ def painel(cliente, pasta):
 
 
 def oferta(painel, valor="4850", **extra):
+    # lotação, 5 eixos (padrão do simulador) e 500 km: piso de R$ 4.071,76
     args = {"cnpj": CNPJ_TRANSP, "mandato": painel["mandato_id"], "valor": valor,
-            "pasta": painel["pasta"], "embarcador": CNPJ_EMBARC, **extra}
+            "pasta": painel["pasta"], "embarcador": CNPJ_EMBARC, "distancia_km": 500, **extra}
     return sim.emitir_oferta(painel["cliente"], **args)
 
 
@@ -178,7 +179,7 @@ def test_oferta_leva_o_nome_do_embarcador_e_o_aceite_usa_quem_recebeu(painel, se
     outro, _ = sim.EMBARCADORES[1]
     r = sim.emitir_oferta(painel["cliente"], cnpj=CNPJ_TRANSP, mandato=painel["mandato_id"],
                           valor="4850", agente=painel["agente_id"], pasta=painel["pasta"],
-                          embarcador=outro)
+                          embarcador=outro, distancia_km=500)
     assert r["embarcador"] == outro and r["embarcador_nome"].startswith("Distribuidora Exemplo")
     [item] = painel["cliente"].get("/ofertas", headers=sessao_painel).json()
     assert item["embarcador"]["nome"] == r["embarcador_nome"]

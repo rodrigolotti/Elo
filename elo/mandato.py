@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from . import VERSAO_PROTOCOLO, versao_ao_menos
 from .antt import (
     TIPOS_CARGA, nome_tipo_carga, normalizar_tipo_carga, piso_centavos, tabela_vigente,
 )
@@ -20,6 +21,12 @@ def _categoria(tipo: str) -> str:
 
 
 AVISO_PISO = "abaixo do piso mínimo da ANTT: risco de multa e indenização"
+SEM_DISTANCIA = "distância não informada: não foi possível conferir o piso da ANTT"
+SEM_EIXOS = "eixos não informados: não foi possível conferir o piso da ANTT"
+
+
+def abaixo_do_piso(problemas: list[str]) -> bool:
+    return any(p.startswith(AVISO_PISO) for p in problemas)
 
 
 def piso_da_oferta(carga: Carga, condicoes: Condicoes,
@@ -55,9 +62,23 @@ def violacoes(
     condicoes: Condicoes,
     momento: datetime,
     revogado_em: str | None = None,
+    versao_protocolo: str | None = VERSAO_PROTOCOLO,
 ) -> list[str]:
-    """Lista os motivos pelos quais a oferta sai do mandato. Vazia = dentro."""
+    """Lista os motivos pelos quais a oferta sai do mandato. Vazia = dentro.
+
+    versao_protocolo é a da oferta: a verificação de uma oferta antiga usa as
+    regras da versão com que ela foi emitida.
+    """
     problemas: list[str] = []
+
+    # protocolo 0.2: em lotação, sem distância ou eixos o piso não pode ser
+    # conferido; a oferta não passa direto (vai para aprovação)
+    if (condicoes.modalidade == "lotacao" and versao_ao_menos(versao_protocolo, "0.2")
+            and tabela_vigente(momento) is not None):
+        if condicoes.distancia_km is None:
+            problemas.append(SEM_DISTANCIA)
+        if condicoes.eixos is None:
+            problemas.append(SEM_EIXOS)
 
     piso = piso_da_oferta(carga, condicoes, momento)
     if piso is not None and condicoes.valor_centavos < piso["piso_centavos"]:

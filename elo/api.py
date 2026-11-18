@@ -98,6 +98,8 @@ class PrepararOferta(_Corpo):
 
 class PrepararAprovacao(_Corpo):
     aprovado_por: str = Field(min_length=1, max_length=200)
+    justificativa: str = Field(default="", max_length=1000,
+                               description="Obrigatória para aprovar frete abaixo do piso da ANTT")
 
 
 class PrepararRecusa(_Corpo):
@@ -479,7 +481,8 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None) -> Fa
     @app.post("/ofertas/{oferta_id}/aprovacao/rascunho", tags=["oferta"])
     def preparar_aprovacao(oferta_id: str, corpo: PrepararAprovacao) -> dict[str, Any]:
         with trava:
-            return {"rascunho": plat().preparar_aprovacao(oferta_id, corpo.aprovado_por)}
+            return {"rascunho": plat().preparar_aprovacao(oferta_id, corpo.aprovado_por,
+                                                          corpo.justificativa)}
 
     @app.post("/ofertas/{oferta_id}/aprovacao", status_code=201, tags=["oferta"])
     def aprovar_oferta(oferta_id: str,

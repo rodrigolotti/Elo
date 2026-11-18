@@ -356,39 +356,61 @@ function blocoCarga(carga, tipoCarga) {
       + (cubado > carga.peso_kg ? ", maior que o peso real" : "")));
 }
 
-/** "Esse frete paga o piso?": distância, valor por km e piso mínimo da ANTT. */
-function blocoPiso(frete, valorCentavos) {
+const AVISO_PISO = "abaixo do piso mínimo da ANTT";
+const PISO_NAO_CONFERIDO = "não foi possível conferir o piso da ANTT";
+const MINIMO_JUSTIFICATIVA = 10;
+const maiuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+/**
+ * Uma caixa só: os motivos da aprovação (os do piso já com os números do frete)
+ * e, embaixo, os dados do frete e do piso da ANTT, sem repetir a frase do piso.
+ */
+function caixaAprovacao(violacoes, frete) {
   const d = frete.distancia;
+  const p = frete.piso;
+  const estimada = p?.estimado;
+  const apoioEstimado = p && estimada
+    ? ` Pela distância estimada, ficaria ${reais(Math.abs(p.folga_centavos))} `
+      + `${p.folga_centavos < 0 ? "abaixo" : "acima"} do piso.` : "";
+  const motivos = violacoes.map((v) => {
+    if (v.startsWith(AVISO_PISO) && p && !estimada) {
+      return h("li", { class: "forte" }, `${reais(-p.folga_centavos)} abaixo do piso mínimo da `
+        + "ANTT: risco de multa e indenização.");
+    }
+    if (v.includes(PISO_NAO_CONFERIDO)) {
+      return h("li", { class: "forte" }, `${maiuscula(v)}.`
+        + (v.startsWith("distância") ? apoioEstimado : ""));
+    }
+    return h("li", {}, maiuscula(datasEmBrasilia(v)));
+  });
+  const pisoEhMotivo = violacoes.some((v) => v.startsWith(AVISO_PISO) || v.includes(PISO_NAO_CONFERIDO));
+  let situacao = null;
+  if (p && !pisoEhMotivo) {
+    situacao = p.folga_centavos >= 0
+      ? h("p", { class: "piso-ok" }, `Acima do piso da ANTT em ${reais(p.folga_centavos)}`
+        + `${estimada ? " (pela distância estimada)" : ""}.`)
+      : h("p", { class: "piso-alerta" }, `Pela distância estimada, ficaria `
+        + `${reais(-p.folga_centavos)} abaixo do piso da ANTT. Confirme a distância com o agente.`);
+  }
   const modalidade = frete.modalidade === "lotacao" ? "Lotação"
     : frete.modalidade === "fracionada" ? "Fracionada" : "Não informada pelo agente";
   const distancia = !d.km ? `Não disponível (${d.detalhe})`
     : d.origem === "agente" ? `${numero(d.km)} km (informada pelo agente)`
     : `≈ ${numero(d.km)} km (estimada: ${d.detalhe})`;
-  const p = frete.piso;
   const data = p ? p.vigencia_desde.split("-").reverse().join("/") : "";
-  let conclusao = null;
-  let classe = "neutro";
-  if (p && p.folga_centavos >= 0) {
-    classe = "bom";
-    conclusao = `Acima do piso em ${reais(p.folga_centavos)}.`;
-  } else if (p) {
-    classe = "ruim";
-    conclusao = p.estimado
-      ? `Pela distância estimada, ficaria ${reais(-p.folga_centavos)} abaixo do piso mínimo da `
-        + "ANTT. Confirme a distância com o agente."
-      : `${reais(-p.folga_centavos)} abaixo do piso mínimo da ANTT: risco de multa e indenização.`;
-  }
-  return h("div", { class: `caixa piso ${classe}` },
-    h("h3", {}, "Esse frete paga o piso?"),
+  return h("div", { class: "caixa motivo" },
+    h("h3", {}, "Por que precisa de aprovação"),
+    h("ul", {}, motivos),
+    situacao,
+    h("h4", {}, "Frete e piso da ANTT"),
     dados([
       ["Modalidade", `${modalidade}${frete.eixos ? ` · ${frete.eixos} eixos` : ""}`],
       ["Distância", distancia],
       frete.valor_por_km_centavos ? ["Valor por km", `${reais(frete.valor_por_km_centavos)}/km`
         + (d.origem === "estimada" ? " (pela distância estimada)" : "")] : null,
-      ["Piso ANTT", p ? `${reais(p.piso_centavos)}${p.estimado ? " (estimado)" : ""} · ${p.nome}, `
+      ["Piso ANTT", p ? `${reais(p.piso_centavos)}${estimada ? " (estimado)" : ""} · ${p.nome}, `
         + `${p.eixos} eixos · tabela vigente desde ${data}` : frete.sem_piso],
-    ]),
-    conclusao ? h("p", { class: "conclusao" }, h("strong", {}, conclusao)) : null);
+    ]));
 }
 
 function cartaoOferta(item, agentes) {
@@ -400,17 +422,27 @@ function cartaoOferta(item, agentes) {
   const aprovar = h("button", { type: "button", class: "botao primario" }, "Aprovar");
   const recusar = h("button", { type: "button", class: "botao perigo-contorno" }, "Recusar");
 
+  const abaixoDoPiso = violacoes.some((v) => v.startsWith(AVISO_PISO));
+
   async function decidir(botao, tipo) {
     const responsavel = campoResponsavel();
     const motivo = h("textarea", { maxlength: 1000, rows: 3 });
+    const justificativa = h("textarea", { maxlength: 1000, rows: 3, name: "justificativa",
+                                          required: true, minlength: MINIMO_JUSTIFICATIVA });
     const resumo = `${frete.charAt(0).toLowerCase()}${frete.slice(1)} para ${nomeEmbarcador}`;
     const ok = await confirmar(tipo === "aprovacao" ? {
       titulo: "Aprovar oferta",
       corpo: [`Você vai aprovar o ${resumo}. A aprovação fica registrada em nome da `
               + "transportadora e não pode ser apagada.",
-              "Depois disso o embarcador pode aceitá-la pelo link enviado pelo agente."],
+              abaixoDoPiso ? h("p", { class: "aviso-forte" }, "Este frete está abaixo do piso "
+                + "mínimo da ANTT: risco de multa e indenização. Para aprovar, escreva a "
+                + "justificativa; ela fica registrada e assinada junto com a aprovação.") : null,
+              "Depois disso o embarcador pode aceitá-la pelo link enviado pelo agente."]
+        .filter(Boolean),
       botao: "Aprovar oferta",
-      campos: [responsavel.rotulo],
+      campos: [responsavel.rotulo,
+        abaixoDoPiso ? campo("Justificativa (obrigatória: frete abaixo do piso da ANTT)",
+          justificativa, `Pelo menos ${MINIMO_JUSTIFICATIVA} caracteres.`) : null].filter(Boolean),
     } : {
       titulo: "Recusar oferta",
       corpo: [`Você vai recusar o ${resumo}. A recusa é definitiva: a oferta não `
@@ -422,6 +454,11 @@ function cartaoOferta(item, agentes) {
     if (!ok) return;
     const nome = responsavel.entrada.value.trim();
     if (!nome) return avisar("Informe seu nome para registrar a decisão.", "erro");
+    const textoJustificativa = justificativa.value.trim();
+    if (tipo === "aprovacao" && abaixoDoPiso && textoJustificativa.length < MINIMO_JUSTIFICATIVA) {
+      return avisar(`Para aprovar frete abaixo do piso da ANTT, escreva a justificativa `
+        + `(pelo menos ${MINIMO_JUSTIFICATIVA} caracteres).`, "erro");
+    }
     localStorage.setItem("elo.responsavel", nome);
     await executando(botao, async () => {
       try {
@@ -429,9 +466,11 @@ function cartaoOferta(item, agentes) {
         const base = `/ofertas/${encodeURIComponent(oferta.id)}`;
         if (tipo === "aprovacao") {
           await api.assinarEEnviar({
-            rotaRascunho: `${base}/aprovacao/rascunho`, corpo: { aprovado_por: nome },
+            rotaRascunho: `${base}/aprovacao/rascunho`,
+            corpo: { aprovado_por: nome, ...(abaixoDoPiso ? { justificativa: textoJustificativa } : {}) },
             rotaEnvio: `${base}/aprovacao`,
-            esperado: { tipo: "aprovacao", oferta_hash, aprovado_por: nome },
+            esperado: { tipo: "aprovacao", oferta_hash, aprovado_por: nome,
+                        ...(abaixoDoPiso ? { justificativa: textoJustificativa } : {}) },
           });
           avisar(`${frete} aprovado e enviado ao embarcador.`);
         } else {
@@ -460,10 +499,7 @@ function cartaoOferta(item, agentes) {
       h("span", { class: `etiqueta ${vencida ? "ruim" : "neutro"}`,
                   title: `Válida até ${emBrasilia(oferta.valida_ate)}` },
         prazoAte(oferta.valida_ate))),
-    h("div", { class: "caixa motivo" },
-      h("h3", {}, "Por que precisa de aprovação"),
-      h("ul", {}, violacoes.map((v) => h("li", {}, datasEmBrasilia(v))))),
-    blocoPiso(item.frete, c.valor_centavos),
+    caixaAprovacao(violacoes, item.frete),
     dados([
       ["Embarcador", blocoEmbarcador(embarcador)],
       ["Rota", rota(oferta.carga)],

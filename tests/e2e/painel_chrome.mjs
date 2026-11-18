@@ -539,13 +539,17 @@ async function roteiro() {
     falhar("o volume ainda aparece em litros");
   }
   ok("cartão: nome do embarcador, primeiro frete, volume em m³, peso cubado e 'vence em 23 h'");
-  for (const trecho of ["Esse frete paga o piso?", "Lotação · 5 eixos", "500 km (informada pelo agente)",
+  for (const trecho of ["Frete e piso da ANTT", "Lotação · 5 eixos", "500 km (informada pelo agente)",
     "R$ 18,00/km", "R$ 4.071,76 · Carga geral, 5 eixos · tabela vigente desde 30/09/2026",
-    "Acima do piso em R$ 4.928,24.",
+    "Acima do piso da ANTT em R$ 4.928,24.",
+    "Distância não informada: não foi possível conferir o piso da ANTT.",
     "Não disponível (estimativa por CEP desligada neste servidor)"]) {
     await p.aguardarTexto(trecho);
   }
-  ok("piso da ANTT: distância do agente, R$/km, piso, folga; sem distância, explica o motivo");
+  const caixasPorCartao = await p.avaliar(
+    "[...document.querySelectorAll('article.cartao')].map((c) => c.querySelectorAll('.caixa').length)");
+  if (caixasPorCartao.some((n) => n !== 1)) falhar(`caixas por cartão: ${caixasPorCartao}`);
+  ok("uma caixa por cartão; lotação sem distância vai para aprovação com o motivo; piso e folga");
 
   const cartao = (id) => `[...document.querySelectorAll("article.cartao")].find((c) => c.innerText.includes(${JSON.stringify(id)}))`;
   await p.clicar("Aprovar", cartao(aprovar.oferta.id));
@@ -623,10 +627,34 @@ async function roteiro() {
   ok("saiu (token encerrado) e entrou de novo assinando o desafio");
   await p.aguardarTexto("2 fretes já fechados com ele");
   ok("depois de 2 aceites, a oferta nova mostra '2 fretes já fechados com ele'");
-  await p.aguardarTexto("abaixo do piso mínimo da ANTT: risco de multa e indenização (piso de R$ 4.071,76");
   await p.aguardarTexto("R$ 3.071,76 abaixo do piso mínimo da ANTT: risco de multa e indenização.");
+  if (await p.avaliar("document.querySelector('main').innerText.includes('(piso de R$ 4.071,76')")) {
+    falhar("a frase do piso aparece repetida no cartão");
+  }
   await p.capturar("abaixo-do-piso");
-  ok("oferta de R$ 1.000 em 500 km: violação e caixa vermelha 'abaixo do piso mínimo da ANTT'");
+  ok("oferta de R$ 1.000 em 500 km: motivo 'abaixo do piso' com os números, sem repetir");
+
+  // aprovar abaixo do piso exige justificativa escrita, assinada com a aprovação
+  await p.clicar("Aprovar");
+  await p.aguardar("document.querySelector('dialog').open");
+  await p.aguardarTexto("Justificativa (obrigatória: frete abaixo do piso da ANTT)");
+  await p.preencher("dialog input", "Ana Gestora");
+  await p.clicar("Aprovar oferta", "document.querySelector('dialog')");
+  await esperar(300);
+  if (!(await p.avaliar("document.querySelector('dialog').open"))) {
+    falhar("aprovou abaixo do piso sem justificativa");
+  }
+  const justificativa = "Cliente estratégico; diferença coberta pelo contrato anual.";
+  await p.preencher("dialog textarea[name=justificativa]", justificativa);
+  await p.capturar("justificativa-abaixo-do-piso");
+  await p.clicar("Aprovar oferta", "document.querySelector('dialog')");
+  await p.aguardarTexto("Frete de R$ 1.000,00 (SP → PR) aprovado e enviado ao embarcador.");
+  const aprovada = (await comToken(await tokenDa(p), "/ofertas"))
+    .find((o) => o.oferta.id === depois.oferta.id);
+  if (aprovada.aprovacao?.justificativa !== justificativa || !aprovada.aprovacao?.assinatura) {
+    falhar(`justificativa não gravada na aprovação: ${JSON.stringify(aprovada.aprovacao)}`);
+  }
+  ok("aprovar abaixo do piso: sem justificativa o diálogo não fecha; com ela, vai assinada");
   await p.menu("/seguranca");
   await p.aguardarTexto("Histórico de acesso");
   await p.aguardarTexto("Criado em");
