@@ -16,7 +16,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 
 from elo.chaves import ParDeChaves
 from elo.cnpj import calcular_digitos, formatar_cnpj
