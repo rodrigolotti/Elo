@@ -179,6 +179,21 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
         with trava:
             return plat().registrar_assinado(assinado, "mandato")
 
+    @app.post("/mandatos/{mandato_id}/revogacao/rascunho", tags=["mandato"])
+    def preparar_revogacao(mandato_id: str) -> dict[str, Any]:
+        with trava:
+            return {"rascunho": plat().preparar_revogacao(mandato_id)}
+
+    @app.post("/mandatos/{mandato_id}/revogacao", status_code=201, tags=["mandato"])
+    def revogar_mandato(mandato_id: str,
+                        assinado: dict[str, Any] = ObjetoAssinado) -> dict[str, Any]:
+        """Revoga o mandato: ofertas emitidas a partir daí saem do mandato."""
+        with trava:
+            plat()._mandato(mandato_id)  # 404 se não existir
+            if assinado.get("mandato_id") != mandato_id:
+                raise ErroElo("a revogação enviada é de outro mandato")
+            return plat().registrar_assinado(assinado, "revogacao")
+
     # ----- pedido (não precisa de assinatura) -----
 
     @app.post("/pedidos", status_code=201, tags=["pedido"])

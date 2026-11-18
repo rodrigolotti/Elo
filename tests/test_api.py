@@ -308,6 +308,89 @@ def test_token_errado_nao_revela_o_status_da_oferta(api):
     assert r.json()["detail"] == "token de aceite inválido"
 
 
+# ---------- revogação de mandato ----------
+
+def revogar(api, chave=None, mandato_id=None):
+    mandato_id = mandato_id or api["mandato_id"]
+    return assinar_e_enviar(api["cliente"], f"/mandatos/{mandato_id}/revogacao/rascunho",
+                            None, chave or api["chave_org"],
+                            f"/mandatos/{mandato_id}/revogacao")
+
+
+def test_revogacao_pela_api_bloqueia_novas_ofertas(api, relogio):
+    preparado, r = revogar(api)
+    assert preparado["rascunho"]["mandato_id"] == api["mandato_id"]
+    assert "assinatura" not in preparado["rascunho"]
+    assert r.status_code == 201, r.text
+    assert r.json()["assinatura"]["chave_id"] == api["chave_org"].chave_id
+
+    relogio.avancar(minutes=1)
+    preparado, emitida = emitir(api)  # valor dentro do limite, mas mandato revogado
+    assert any("revogado" in v for v in preparado["violacoes"])
+    assert emitida["status"] == "aguardando_aprovacao"
+    assert aceitar(api, emitida["oferta"]["id"]).status_code == 400
+
+
+def test_revogacao_nao_invalida_compromisso_anterior(api, relogio):
+    _, emitida = emitir(api)
+    cp_id = aceitar(api, emitida["oferta"]["id"]).json()["id"]
+    relogio.avancar(hours=1)
+    assert revogar(api)[1].status_code == 201
+    rel = api["cliente"].get(f"/compromissos/{cp_id}/verificacao").json()
+    assert rel["valido"], [v for v in rel["verificacoes"] if not v["ok"]]
+
+
+def test_revogacao_exige_chave_da_organizacao(api):
+    _, r = revogar(api, chave=ParDeChaves.gerar("intruso"))
+    assert r.status_code == 400 and "não confere" in r.json()["detail"]
+    _, r = revogar(api, chave=api["chave_agente"])  # nem o próprio agente pode
+    assert r.status_code == 400
+
+
+def test_mandato_nao_pode_ser_revogado_duas_vezes(api):
+    assert revogar(api)[1].status_code == 201
+    r = api["cliente"].post(f"/mandatos/{api['mandato_id']}/revogacao/rascunho")
+    assert r.status_code == 400 and "já revogado" in r.json()["detail"]
+
+
+def test_dois_rascunhos_de_revogacao_so_um_vale(api, relogio):
+    c = api["cliente"]
+    rota = f"/mandatos/{api['mandato_id']}/revogacao"
+    a = c.post(rota + "/rascunho").json()["rascunho"]
+    relogio.avancar(seconds=5)
+    b = c.post(rota + "/rascunho").json()["rascunho"]
+    assert c.post(rota, json=api["chave_org"].assinar(a)).status_code == 201
+    r = c.post(rota, json=api["chave_org"].assinar(b))
+    assert r.status_code == 400 and "já revogado" in r.json()["detail"]
+
+
+def test_revogacao_de_mandato_inexistente_vira_404(api):
+    assert api["cliente"].post("/mandatos/md_x/revogacao/rascunho").status_code == 404
+    assert api["cliente"].post("/mandatos/md_x/revogacao", json={}).status_code == 404
+
+
+def test_revogacao_em_rota_de_outro_mandato_e_recusada(api):
+    _, r = assinar_e_enviar(api["cliente"], "/mandatos/rascunho", {
+        "cnpj": CNPJ_TRANSP, "agente_id": api["agente_id"], "limites": LIMITES,
+    }, api["chave_org"], "/mandatos")
+    outro = r.json()["id"]
+    rascunho = api["cliente"].post(f"/mandatos/{api['mandato_id']}/revogacao/rascunho"
+                                   ).json()["rascunho"]
+    r = api["cliente"].post(f"/mandatos/{outro}/revogacao",
+                            json=api["chave_org"].assinar(rascunho))
+    assert r.status_code == 400 and "outro mandato" in r.json()["detail"]
+
+
+def test_oferta_preparada_antes_e_assinada_depois_da_revogacao_e_recusada(api, relogio):
+    r = api["cliente"].post("/ofertas/rascunho", json=corpo_oferta(api))
+    assert r.json()["violacoes"] == []
+    rascunho = r.json()["rascunho"]
+    relogio.avancar(minutes=1)
+    assert revogar(api)[1].status_code == 201
+    r = api["cliente"].post("/ofertas", json=api["chave_agente"].assinar(rascunho))
+    assert r.status_code == 400 and "revogado" in r.json()["detail"]
+
+
 # ---------- página de verificação ----------
 
 def test_pagina_de_compromisso_inexistente(cliente):

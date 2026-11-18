@@ -16,7 +16,7 @@ Requisitos: Python 3.11+, `pydantic` 2 e `cryptography`. Para a API, `fastapi`,
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 47 testes (19 do núcleo + 28 da API)
+python3 -m pytest -q     # 56 testes (20 do núcleo + 36 da API)
 ```
 
 ## API no Windows (cmd)
@@ -51,7 +51,8 @@ python demo_api.py
 
 Ela gera as chaves da transportadora e do agente **localmente**, cadastra tudo pela
 API, emite uma oferta dentro do mandato e outra acima do limite (que passa por
-aprovação), aceita as duas e imprime no final os links, por exemplo:
+aprovação), aceita as duas, revoga o mandato (mostrando que a oferta seguinte já
+sai dele) e imprime no final os links, por exemplo:
 
 ```
 Abra no navegador:
@@ -80,6 +81,7 @@ Toda operação que precisa da assinatura de uma empresa tem dois passos:
 | `POST /organizacoes/rascunho` → `POST /organizacoes` | Cadastra a organização | a própria organização |
 | `POST /agentes/rascunho` → `POST /agentes` | Emite o certificado do agente | organização |
 | `POST /mandatos/rascunho` → `POST /mandatos` | Emite o mandato | organização |
+| `POST /mandatos/{id}/revogacao/rascunho` → `POST /mandatos/{id}/revogacao` | Revoga o mandato | organização |
 | `POST /pedidos` | Registra o pedido de cotação | ninguém |
 | `POST /ofertas/rascunho` → `POST /ofertas` | Emite a oferta (diz se sai do mandato) | agente |
 | `POST /ofertas/{id}/aprovacao/rascunho` → `POST /ofertas/{id}/aprovacao` | Aprovação humana | organização |
@@ -110,7 +112,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 
 - Cadastro de organização por CNPJ (com dígitos verificadores) e chave Ed25519 própria.
 - Certificado do agente, assinado pela chave da organização.
-- Mandato assinado: valor máximo, UFs de origem e destino, tipos de carga e validade. Pode ser revogado.
+- Mandato assinado: valor máximo, UFs de origem e destino, tipos de carga e validade. Pode ser revogado (revogação também assinada pela organização). A revogação vale pela ordem do registro: ofertas registradas antes dela continuam autorizadas, as registradas depois saem do mandato, mesmo que caiam no mesmo segundo.
 - Oferta assinada pelo agente. Se ela sair do mandato, fica aguardando aprovação humana.
 - Aprovação humana assinada com a chave da organização.
 - Aceite do embarcador por link, atestado pela plataforma. Exige o token de aceite de uso único gerado na emissão da oferta. Só o destinatário pode aceitar, só dentro da validade e uma vez só.

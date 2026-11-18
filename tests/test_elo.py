@@ -97,6 +97,24 @@ def test_mandato_revogado_bloqueia_novas_ofertas(cenario):
     assert any("revogado" in x for x in problemas)
 
 
+def test_revogacao_no_mesmo_segundo_vale_pela_ordem_do_registro(cenario):
+    """Sem avançar o relógio: oferta, aceite e revogação no mesmo segundo."""
+    p = cenario["plataforma"]
+    oferta, problemas, token = p.emitir_oferta(
+        cenario["pedido_id"], cenario["agente_id"], cenario["mandato_id"],
+        cenario["chave_agente"], condicoes(), VALIDADE)
+    assert problemas == []
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+    p.revogar_mandato(cenario["mandato_id"], cenario["chave_org"])
+    # a oferta entrou no registro antes da revogação: continua autorizada
+    assert p.verificar_compromisso(cp["id"]).valido
+    # a oferta seguinte, no mesmo segundo, já sai do mandato
+    _, problemas, _ = p.emitir_oferta(
+        cenario["pedido_id"], cenario["agente_id"], cenario["mandato_id"],
+        cenario["chave_agente"], condicoes(), VALIDADE)
+    assert any("revogado" in x for x in problemas)
+
+
 def test_oferta_vencida_nao_pode_ser_aceita(cenario):
     p = cenario["plataforma"]
     oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],

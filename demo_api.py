@@ -119,6 +119,25 @@ def executar(cliente: httpx.Client) -> list[str]:
         print(f"   compromisso {cp['id']}: {ok}/{len(relatorio['verificacoes'])} "
               f"checagens OK -> {'VÁLIDO' if relatorio['valido'] else 'INVÁLIDO'}")
         compromissos.append(cp["id"])
+
+    print("6. A transportadora revoga o mandato (assinado localmente)")
+    assinar_e_enviar(cliente, f"/mandatos/{mandato['id']}/revogacao/rascunho", {},
+                     chave_org, f"/mandatos/{mandato['id']}/revogacao")
+    pedido = _ok(cliente.post("/pedidos", json={
+        "cnpj_solicitante": cnpj_embarc, "canal": "email",
+        "carga": {"origem_cep": "00000-000", "origem_uf": "SP",
+                  "destino_cep": "11111-111", "destino_uf": "SP",
+                  "peso_kg": 500, "volume_litros": 2000, "tipo": "carga geral"}}))
+    preparado = _ok(cliente.post("/ofertas/rascunho", json={
+        "pedido_id": pedido["id"], "agente_id": agente["agente_id"],
+        "mandato_id": mandato["id"],
+        "condicoes": {"valor_centavos": 100_000,
+                      "coleta_ate": (agora + timedelta(days=3)).date().isoformat(),
+                      "prazo_entrega_dias_uteis": 1},
+        "valida_ate": (agora + timedelta(days=1)).isoformat(timespec="seconds"),
+    }))
+    print(f"   nova oferta de R$ 1.000 já sai do mandato: {'; '.join(preparado['violacoes'])}")
+    print("   (os compromissos firmados antes da revogação continuam válidos)")
     return compromissos
 
 

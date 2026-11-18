@@ -157,6 +157,10 @@ class Plataforma:
         self.aprovacoes: dict[str, dict[str, Any]] = {}
         self.compromissos: dict[str, dict[str, Any]] = {}
         self.token_aceite_hash: dict[str, str | None] = {}
+        # o mandato já estava revogado quando a oferta entrou no registro?
+        # (ordem do registro, protegida pela corrente de hashes; os horários
+        # têm resolução de segundos e não bastam para desempatar)
+        self.revogado_na_emissao: dict[str, bool] = {}
         for ev in self.registro.eventos():
             self._aplicar(ev.tipo, ev.payload)
 
@@ -178,6 +182,7 @@ class Plataforma:
             self.ofertas[oferta["id"]] = oferta
             self.ofertas_por_hash[hash_sha256(oferta)] = oferta["id"]
             self.status_oferta[oferta["id"]] = p["status"]
+            self.revogado_na_emissao[oferta["id"]] = oferta.get("mandato_id") in self.revogacoes
             self.token_aceite_hash[oferta["id"]] = p.get("token_aceite_hash")
         elif tipo == "oferta_aprovada":
             # .get: num registro adulterado o hash pode não achar a oferta
@@ -577,7 +582,9 @@ class Plataforma:
                 LimitesMandato(**mandato["limites"]),
                 Carga(**oferta["carga"]), Condicoes(**oferta["condicoes"]),
                 ler_momento(oferta["emitida_em"]),
-                self.revogacoes.get(mandato["id"], {}).get("em"),
+                # revogação registrada depois da oferta não a torna irregular
+                self.revogacoes.get(mandato["id"], {}).get("em")
+                if self.revogado_na_emissao.get(oferta_id) else None,
             )
             aprovacao = self.aprovacoes.get(oferta_id)
             if not problemas:
