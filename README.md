@@ -182,7 +182,7 @@ servidos pelo próprio FastAPI, sem framework e sem etapa de build.
 | Mandatos | Define valor máximo, UFs, tipos de carga e validade, e revoga mandatos |
 | Aprovações | Fila das ofertas fora do mandato, com o motivo de cada uma: aprovar ou recusar |
 | Histórico | Compromissos firmados, com link para `/verificar/{id}` |
-| Segurança | Chave principal, chave de recuperação, histórico de chaves e "gerar nova chave de recuperação" |
+| Segurança | Quando o acesso e o arquivo de recuperação foram criados, histórico e "gerar novo arquivo de recuperação" (códigos técnicos em "Ver detalhes") |
 | Recuperar | Troca a chave da organização com o arquivo de recuperação e a frase-senha |
 
 **A chave da organização nunca sai do navegador.** Ela é criada com a Web Crypto
@@ -246,6 +246,42 @@ assinada pela chave de recuperação. Depois da troca:
 Sem o arquivo **e** a frase-senha, perder a chave principal continua sendo
 definitivo: o Elo não guarda nenhum dos dois.
 
+### Testar o fluxo de fretes no painel (simulador de agente)
+
+`scripts/simular_agente.py` faz o papel do agente de cotação e de um embarcador
+fictício, só pela API. Com a API no ar (`uvicorn elo.api:app`) e a transportadora
+já cadastrada no painel, abra **um segundo** `cmd` na pasta do projeto:
+
+```bat
+.venv\Scripts\activate.bat
+
+:: 1. gera a chave do agente e mostra o que colar na tela Agentes
+python scripts\simular_agente.py chave
+```
+
+No painel: em **Agentes**, cole o identificador e a chave pública que o comando
+mostrou e cadastre o agente; em **Mandatos**, emita um mandato para ele. Depois:
+
+```bat
+:: 2. o embarcador fictício pede cotação e o agente responde com uma oferta assinada
+::    (--agente é o ID na tela Agentes, começa com ag_; só é preciso na primeira vez;
+::     --mandato está no cartão do mandato, começa com md_)
+python scripts\simular_agente.py oferta --cnpj 11.222.333/0001-81 --mandato md_... --valor 4850 --agente ag_...
+
+:: 3. o embarcador aceita, com o token que a oferta mostrou
+python scripts\simular_agente.py aceitar --oferta of_... --token ...
+```
+
+- Use em `--cnpj` o CNPJ com que a transportadora foi cadastrada no painel.
+- Um valor acima do limite do mandato (por exemplo `--valor 9000`) faz a oferta
+  aparecer em **Aprovações**. O aceite só funciona depois de aprovar no painel.
+- O aceite imprime o link da página `/verificar` e o compromisso aparece em **Histórico**.
+- A chave privada do agente fica em `chaves_locais\agente.json`, pasta que o git
+  ignora. Para trocar de agente, `chave --substituir`.
+- Outras opções: `--url` (padrão `http://127.0.0.1:8000`), `--embarcador`,
+  `--origem`, `--destino` e `--tipo`. Veja `python scripts\simular_agente.py oferta --help`.
+- O embarcador fictício usa o CNPJ de exemplo `22.333.444/0001-81`.
+
 ### Verificação num Chrome de verdade
 
 ```bat
@@ -259,7 +295,13 @@ e do embarcador. No caminho, confere:
 - se a chave no IndexedDB está como `extractable: false`;
 - se a confirmação da frase-senha recusa grupos errados;
 - se o passo 2 do cadastro esconde o menu e pede confirmação para sair, mantendo a
-  mesma frase-senha quando a pessoa escolhe continuar;
+  mesma frase-senha e o endereço `#/cadastro` quando a pessoa escolhe continuar;
+- se, numa janela de notebook (1280×650), os botões do passo 2 aparecem sem rolar e
+  há uma caixa de aviso só;
+- se um F5 no passo 2 volta ao passo (com frase nova e o aviso de descartar um
+  arquivo baixado antes) e se quem sai sem terminar vê, em todas as telas, que a
+  transportadora está sem arquivo de recuperação;
+- se a aba Segurança mostra datas, e não códigos técnicos (que ficam em "Ver detalhes");
 - se algum aviso fica em cima de um botão (conferido a cada captura de tela);
 - a recuperação num "outro computador" (um segundo contexto do navegador, com
   IndexedDB próprio): frase errada mostra a mensagem na tela, os mandatos ficam
@@ -350,6 +392,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 | `tests/js/navegador_node.mjs` | Roda os módulos do painel no Node para os testes de compatibilidade |
 | `tests/e2e/painel_chrome.mjs` | Percorre o painel num Chrome headless |
 | `scripts/captura_verificacao.mjs` | Gera `docs/verificacao.png` com dados fictícios |
+| `scripts/simular_agente.py` | Simula agente e embarcador pela API, para testar o painel |
 | `demo_api.py` | Cliente de demonstração: gera as chaves localmente e chama a API |
 
 ## Decisões de projeto
