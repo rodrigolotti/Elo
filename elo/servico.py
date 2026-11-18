@@ -57,6 +57,7 @@ CHECAGENS = (
     "Oferta assinada pelo agente",
     "Organização do agente cadastrada",
     "Cadastro da organização autoassinado",
+    "Histórico de chaves da organização íntegro",
     "Certificado do agente assinado pela organização",
     "Oferta emitida pela mesma organização do agente",
     "Mandato assinado pela organização para este agente",
@@ -64,7 +65,7 @@ CHECAGENS = (
     "Aceite feito pelo destinatário",
     "Aceite dentro da validade da oferta",
 )
-"""As 14 checagens do relatório de verificação, na ordem em que são feitas."""
+"""As 15 checagens do relatório de verificação, na ordem em que são feitas."""
 
 
 def _novo_id(prefixo: str) -> str:
@@ -96,7 +97,7 @@ class Relatorio:
         return ok
 
     def completar(self) -> None:
-        """Garante as 14 checagens: as que não puderam ser feitas contam como falha."""
+        """Garante todas as checagens: as que não puderam ser feitas contam como falha."""
         feitas = {v.nome for v in self.verificacoes}
         for nome in CHECAGENS:
             if nome not in feitas:
@@ -104,6 +105,29 @@ class Relatorio:
                     nome, False, "não verificada: uma checagem anterior falhou"))
         ordem = {nome: i for i, nome in enumerate(CHECAGENS)}
         self.verificacoes.sort(key=lambda v: ordem.get(v.nome, len(ordem)))
+
+
+@dataclass
+class ChaveOrg:
+    """Uma chave principal da organização e a faixa do registro em que valeu."""
+
+    chave_id: str
+    chave_publica: str
+    desde_seq: int
+    ate_seq: int | None = None  # None = vigente
+
+    def valia_em(self, seq: int) -> bool:
+        return self.desde_seq <= seq and (self.ate_seq is None or seq < self.ate_seq)
+
+
+@dataclass
+class EventoChave:
+    """Definição de chave de recuperação ou rotação, com o resultado da conferência."""
+
+    seq: int
+    tipo: str
+    valido: bool
+    motivo: str = ""
 
 
 @dataclass
@@ -163,18 +187,31 @@ class Plataforma:
         # (ordem do registro, protegida pela corrente de hashes; os horários
         # têm resolução de segundos e não bastam para desempatar)
         self.revogado_na_emissao: dict[str, bool] = {}
+        # chaves da organização ao longo do tempo (pela ordem do registro)
+        self.chaves_org: dict[str, list[ChaveOrg]] = {}
+        self.recuperacao_org: dict[str, dict[str, Any]] = {}
+        self.eventos_chave: dict[str, list[EventoChave]] = {}
+        # em que posição do registro entrou cada objeto assinado pela organização:
+        # a assinatura é conferida contra a chave que valia ali
+        self.seq_objeto: dict[tuple[str, str], int] = {}
         for ev in self.registro.eventos():
-            self._aplicar(ev.tipo, ev.payload)
+            self._aplicar(ev.tipo, ev.payload, ev.seq)
 
-    def _aplicar(self, tipo: str, p: dict[str, Any]) -> None:
+    def _aplicar(self, tipo: str, p: dict[str, Any], seq: int) -> None:
         if tipo == "plataforma_chave":
             self.chaves_plataforma[p["chave_id"]] = p["chave_publica"]
         elif tipo == "organizacao_cadastrada":
             self.organizacoes[p["cnpj"]] = p
+            self.chaves_org[p["cnpj"]] = [ChaveOrg(p["chave_id"], p["chave_publica"], seq)]
+            self.eventos_chave[p["cnpj"]] = []
+        elif tipo in ("chave_recuperacao_definida", "chave_rotacionada"):
+            self._aplicar_evento_de_chave(tipo, p, seq)
         elif tipo == "agente_emitido":
             self.agentes[p["agente_id"]] = p
+            self.seq_objeto[("agente", p["agente_id"])] = seq
         elif tipo == "mandato_emitido":
             self.mandatos[p["id"]] = p
+            self.seq_objeto[("mandato", p["id"])] = seq
         elif tipo == "mandato_revogado":
             self.revogacoes[p["mandato_id"]] = p
         elif tipo == "pedido_recebido":
@@ -192,6 +229,7 @@ class Plataforma:
             oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
             if oferta_id is not None:
                 self.aprovacoes[oferta_id] = p
+                self.seq_objeto[("aprovacao", oferta_id)] = seq
                 # uma aprovação gravada depois de uma recusa não reabre a oferta
                 if oferta_id not in self.recusas:
                     self.status_oferta[oferta_id] = "enviada"
@@ -199,6 +237,7 @@ class Plataforma:
             oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
             if oferta_id is not None:
                 self.recusas[oferta_id] = p
+                self.seq_objeto[("recusa", oferta_id)] = seq
                 self.status_oferta[oferta_id] = "recusada"
         elif tipo == "compromisso_firmado":
             self.compromissos[p["id"]] = p
@@ -206,9 +245,76 @@ class Plataforma:
             if oferta_id is not None:
                 self.status_oferta[oferta_id] = "aceita"
 
+    def _aplicar_evento_de_chave(self, tipo: str, p: dict[str, Any], seq: int) -> None:
+        """Aplica definição de recuperação ou rotação SÓ se a assinatura conferir.
+
+        A plataforma nunca grava um evento inválido; se aparecer um (banco
+        adulterado), ele não muda as chaves vigentes e fica no histórico como
+        falha, com o motivo, para a checagem "Histórico de chaves" mostrar.
+        """
+        cnpj = p.get("cnpj") if isinstance(p, dict) else None
+        if cnpj not in self.chaves_org:
+            return  # organização desconhecida: nada a que se ligar
+        atual = self.chaves_org[cnpj][-1]
+        recuperacao = self.recuperacao_org.get(cnpj)
+        nome = "definição de chave de recuperação" if tipo == "chave_recuperacao_definida" \
+            else "rotação de chave"
+
+        def anotar(valido: bool, motivo: str = "") -> None:
+            self.eventos_chave[cnpj].append(EventoChave(seq, nome, valido, motivo))
+            return None
+
+        try:
+            if tipo == "chave_recuperacao_definida":
+                if p["chave_principal_id"] != atual.chave_id:
+                    return anotar(False, f"{nome} feita sobre outra chave principal")
+                if not verificar_assinatura(p, atual.chave_publica):
+                    return anotar(False, f"{nome}: assinatura não confere com a chave "
+                                         f"principal vigente ({atual.chave_id})")
+                anotar(True)
+                self.recuperacao_org[cnpj] = {"chave_id": p["chave_id"],
+                                              "chave_publica": p["chave_publica"], "seq": seq}
+                return
+            # rotação: assinada pela chave de RECUPERAÇÃO vigente
+            if recuperacao is None:
+                return anotar(False, f"{nome} sem chave de recuperação definida")
+            if p["chave_anterior"]["chave_publica"] != atual.chave_publica:
+                return anotar(False, f"{nome} feita sobre outra chave principal")
+            if p["recuperacao_usada"]["chave_publica"] != recuperacao["chave_publica"]:
+                return anotar(False, f"{nome} com uma chave de recuperação que não é a "
+                                     "vigente")
+            if not verificar_assinatura(p, recuperacao["chave_publica"]):
+                return anotar(False, f"{nome}: assinatura não confere com a chave de "
+                                     f"recuperação vigente ({recuperacao['chave_id']})")
+            anotar(True)
+            atual.ate_seq = seq
+            nova = p["chave_nova"]
+            self.chaves_org[cnpj].append(ChaveOrg(nova["chave_id"], nova["chave_publica"], seq))
+            rec = p["recuperacao_nova"]
+            self.recuperacao_org[cnpj] = {"chave_id": rec["chave_id"],
+                                          "chave_publica": rec["chave_publica"], "seq": seq}
+            # rascunhos à espera das chaves antigas não podem mais ser assinados
+            antigas = {atual.chave_publica, recuperacao["chave_publica"]}
+            for h in [h for h, r in self._rascunhos.items() if r.chave_publica in antigas]:
+                del self._rascunhos[h]
+        except (KeyError, TypeError):
+            anotar(False, f"{nome} mal formada")
+
     def _incluir(self, tipo: str, payload: dict[str, Any], objeto_id: str) -> None:
-        self.registro.incluir(tipo, payload, self._agora_iso(), objeto_id)
-        self._aplicar(tipo, payload)
+        evento = self.registro.incluir(tipo, payload, self._agora_iso(), objeto_id)
+        self._aplicar(tipo, payload, evento.seq)
+
+    def _chave_atual(self, cnpj: str) -> ChaveOrg:
+        return self.chaves_org[self._org(cnpj)["cnpj"]][-1]
+
+    def _assinado_pela_org(self, objeto: dict[str, Any], cnpj: str,
+                           tipo: str, objeto_id: str) -> bool:
+        """A assinatura confere com a chave da organização que valia quando o
+        objeto entrou no registro?"""
+        seq = self.seq_objeto.get((tipo, objeto_id))
+        chave = next((c for c in self.chaves_org.get(cnpj, []) if seq is not None
+                      and c.valia_em(seq)), None)
+        return chave is not None and verificar_assinatura(objeto, chave.chave_publica)
 
     def _agora(self) -> datetime:
         return self.relogio()
@@ -320,7 +426,7 @@ class Plataforma:
         }
         return self._guardar_rascunho("certificado_agente", "agente_emitido",
                                       certificado, certificado["agente_id"],
-                                      org["chave_publica"])
+                                      self._chave_atual(cnpj).chave_publica)
 
     def emitir_agente(self, cnpj: str, chave_org: ParDeChaves,
                       chave_agente: ParDeChaves, nome: str) -> dict[str, Any]:
@@ -345,7 +451,7 @@ class Plataforma:
             "emitido_em": self._agora_iso(),
         }
         return self._guardar_rascunho("mandato", "mandato_emitido", mandato,
-                                      mandato["id"], org["chave_publica"])
+                                      mandato["id"], self._chave_atual(cnpj).chave_publica)
 
     def emitir_mandato(self, cnpj: str, chave_org: ParDeChaves, agente_id: str,
                        limites: LimitesMandato) -> dict[str, Any]:
@@ -365,12 +471,115 @@ class Plataforma:
         revogacao = {"tipo": "revogacao", "mandato_id": mandato_id,
                      "em": self._agora_iso()}
         return self._guardar_rascunho("revogacao", "mandato_revogado", revogacao,
-                                      mandato_id, org["chave_publica"], revalidar)
+                                      mandato_id, self._chave_atual(org["cnpj"]).chave_publica,
+                                      revalidar)
 
     def revogar_mandato(self, mandato_id: str, chave_org: ParDeChaves) -> dict[str, Any]:
         self._exigir_chave_da_org(self._org(self._mandato(mandato_id)["cnpj"]), chave_org)
         rascunho = self.preparar_revogacao(mandato_id)
         return self.registrar_assinado(chave_org.assinar(rascunho), "revogacao")
+
+    # ---------- chave de recuperação e rotação da chave principal ----------
+
+    def preparar_recuperacao(self, cnpj: str, chave_id: str,
+                             chave_publica: str) -> dict[str, Any]:
+        """Define (ou troca) a chave de recuperação. Assinado pela chave principal."""
+        org = self._org(cnpj)
+        atual = self._chave_atual(cnpj)
+        if not chave_publica_valida(chave_publica):
+            raise ErroElo("chave pública Ed25519 de recuperação inválida")
+        if chave_publica == atual.chave_publica:
+            raise ErroElo("a chave de recuperação precisa ser diferente da chave principal")
+
+        def revalidar() -> None:
+            if self._chave_atual(cnpj).chave_publica != atual.chave_publica:
+                raise ErroElo("a chave principal mudou depois do rascunho: prepare de novo")
+
+        definicao = {
+            "tipo": "recuperacao_chave",
+            "versao_protocolo": VERSAO_PROTOCOLO,
+            "cnpj": org["cnpj"],
+            "chave_principal_id": atual.chave_id,
+            "chave_id": chave_id,
+            "chave_publica": chave_publica,
+            "definida_em": self._agora_iso(),
+        }
+        return self._guardar_rascunho("recuperacao_chave", "chave_recuperacao_definida",
+                                      definicao, org["cnpj"], atual.chave_publica, revalidar)
+
+    def definir_recuperacao(self, cnpj: str, chave_org: ParDeChaves,
+                            chave_recuperacao: ParDeChaves) -> dict[str, Any]:
+        self._exigir_chave_da_org(self._org(cnpj), chave_org)
+        rascunho = self.preparar_recuperacao(cnpj, chave_recuperacao.chave_id,
+                                             chave_recuperacao.publica_b64)
+        return self.registrar_assinado(chave_org.assinar(rascunho), "recuperacao_chave")
+
+    def preparar_rotacao(self, cnpj: str, chave_id: str, chave_publica: str,
+                         recuperacao_chave_id: str,
+                         recuperacao_chave_publica: str) -> dict[str, Any]:
+        """Troca a chave principal. Assinado pela chave de RECUPERAÇÃO vigente,
+        que também é trocada: o arquivo de recuperação usado deixa de valer."""
+        org = self._org(cnpj)
+        atual = self._chave_atual(cnpj)
+        recuperacao = self.recuperacao_org.get(org["cnpj"])
+        if recuperacao is None:
+            raise ErroElo("a organização não tem chave de recuperação: não há como trocar "
+                          "a chave principal")
+        for rotulo, chave in (("principal nova", chave_publica),
+                              ("de recuperação nova", recuperacao_chave_publica)):
+            if not chave_publica_valida(chave):
+                raise ErroElo(f"chave {rotulo} inválida")
+        usadas = {atual.chave_publica, recuperacao["chave_publica"]}
+        if chave_publica in usadas or recuperacao_chave_publica in usadas \
+                or chave_publica == recuperacao_chave_publica:
+            raise ErroElo("a chave principal nova e a de recuperação nova precisam ser "
+                          "novas e diferentes entre si")
+
+        def revalidar() -> None:
+            if (self._chave_atual(cnpj).chave_publica != atual.chave_publica
+                    or self.recuperacao_org.get(org["cnpj"]) != recuperacao):
+                raise ErroElo("as chaves da organização mudaram depois do rascunho: "
+                              "prepare de novo")
+
+        rotacao = {
+            "tipo": "rotacao_chave",
+            "versao_protocolo": VERSAO_PROTOCOLO,
+            "cnpj": org["cnpj"],
+            "chave_anterior": {"chave_id": atual.chave_id,
+                               "chave_publica": atual.chave_publica},
+            "chave_nova": {"chave_id": chave_id, "chave_publica": chave_publica},
+            "recuperacao_usada": {"chave_id": recuperacao["chave_id"],
+                                  "chave_publica": recuperacao["chave_publica"]},
+            "recuperacao_nova": {"chave_id": recuperacao_chave_id,
+                                 "chave_publica": recuperacao_chave_publica},
+            "em": self._agora_iso(),
+        }
+        return self._guardar_rascunho("rotacao_chave", "chave_rotacionada", rotacao,
+                                      org["cnpj"], recuperacao["chave_publica"], revalidar)
+
+    def rotacionar_chave(self, cnpj: str, chave_recuperacao: ParDeChaves,
+                         nova_chave: ParDeChaves,
+                         nova_recuperacao: ParDeChaves) -> dict[str, Any]:
+        rascunho = self.preparar_rotacao(cnpj, nova_chave.chave_id, nova_chave.publica_b64,
+                                         nova_recuperacao.chave_id,
+                                         nova_recuperacao.publica_b64)
+        return self.registrar_assinado(chave_recuperacao.assinar(rascunho), "rotacao_chave")
+
+    def resumo_organizacao(self, cnpj: str) -> dict[str, Any]:
+        """Cadastro, chave vigente, chave de recuperação e histórico de chaves."""
+        org = self._org(cnpj)
+        atual = self._chave_atual(cnpj)
+        recuperacao = self.recuperacao_org.get(org["cnpj"])
+        return {
+            "cadastro": org,
+            "chave_atual": {"chave_id": atual.chave_id, "chave_publica": atual.chave_publica},
+            "recuperacao": None if recuperacao is None else {
+                "chave_id": recuperacao["chave_id"],
+                "chave_publica": recuperacao["chave_publica"]},
+            "historico_chaves": [{"seq": e.seq, "evento": e.tipo, "valido": e.valido,
+                                  "motivo": e.motivo}
+                                 for e in self.eventos_chave.get(org["cnpj"], [])],
+        }
 
     # ---------- pedido e oferta ----------
 
@@ -482,7 +691,8 @@ class Plataforma:
             "em": self._agora_iso(),
         }
         return self._guardar_rascunho("aprovacao", "oferta_aprovada", aprovacao,
-                                      oferta_id, org["chave_publica"], revalidar)
+                                      oferta_id, self._chave_atual(org["cnpj"]).chave_publica,
+                                      revalidar)
 
     def aprovar_oferta(self, oferta_id: str, chave_org: ParDeChaves,
                        aprovado_por: str) -> dict[str, Any]:
@@ -511,7 +721,8 @@ class Plataforma:
             "em": self._agora_iso(),
         }
         return self._guardar_rascunho("recusa", "oferta_recusada", recusa,
-                                      oferta_id, org["chave_publica"], revalidar)
+                                      oferta_id, self._chave_atual(org["cnpj"]).chave_publica,
+                                      revalidar)
 
     def recusar_oferta(self, oferta_id: str, chave_org: ParDeChaves,
                        recusado_por: str, motivo: str = "") -> dict[str, Any]:
@@ -605,14 +816,22 @@ class Plataforma:
             return
         r.checar("Cadastro da organização autoassinado",
                  verificar_assinatura(org, org["chave_publica"]))
+        eventos = self.eventos_chave.get(org["cnpj"], [])
+        falhas = [e for e in eventos if not e.valido]
+        trocas = len(self.chaves_org[org["cnpj"]]) - 1
+        r.checar("Histórico de chaves da organização íntegro", not falhas,
+                 f"evento {falhas[0].seq}: {falhas[0].motivo}" if falhas
+                 else "chave original, sem rotação" if not trocas
+                 else f"{trocas} rotação(ões) de chave, todas assinadas pela chave "
+                      "de recuperação vigente")
         r.checar("Certificado do agente assinado pela organização",
-                 verificar_assinatura(agente, org["chave_publica"]))
+                 self._assinado_pela_org(agente, org["cnpj"], "agente", agente["agente_id"]))
         r.checar("Oferta emitida pela mesma organização do agente",
                  oferta["emissor"]["cnpj"] == org["cnpj"])
 
         mandato = self.mandatos.get(oferta["mandato_id"])
         mandato_ok = (mandato is not None
-                      and verificar_assinatura(mandato, org["chave_publica"])
+                      and self._assinado_pela_org(mandato, org["cnpj"], "mandato", mandato["id"])
                       and mandato["agente_id"] == agente["agente_id"])
         r.checar("Mandato assinado pela organização para este agente", mandato_ok)
 
@@ -627,14 +846,16 @@ class Plataforma:
             )
             aprovacao = self.aprovacoes.get(oferta_id)
             recusa = self.recusas.get(oferta_id)
-            if recusa is not None and verificar_assinatura(recusa, org["chave_publica"]):
+            if recusa is not None and self._assinado_pela_org(recusa, org["cnpj"], "recusa",
+                                                              oferta_id):
                 r.checar("Oferta autorizada", False,
                          f"oferta recusada pela organização em {recusa['em']} "
                          f"por {recusa['recusado_por']}")
             elif not problemas:
                 r.checar("Oferta autorizada", True, "dentro do mandato")
             elif aprovacao is not None:
-                aprov_ok = (verificar_assinatura(aprovacao, org["chave_publica"])
+                aprov_ok = (self._assinado_pela_org(aprovacao, org["cnpj"], "aprovacao",
+                                                    oferta_id)
                             and aprovacao["oferta_hash"] == cp["oferta_hash"]
                             and ler_momento(aprovacao["em"])
                             <= ler_momento(cp["aceite"]["em"]))
@@ -713,7 +934,6 @@ class Plataforma:
             raise NaoEncontrado(f"oferta desconhecida: {oferta_id}")
         return self.ofertas[oferta_id]
 
-    @staticmethod
-    def _exigir_chave_da_org(org: dict[str, Any], chave_org: ParDeChaves) -> None:
-        if chave_org.publica_b64 != org["chave_publica"]:
+    def _exigir_chave_da_org(self, org: dict[str, Any], chave_org: ParDeChaves) -> None:
+        if chave_org.publica_b64 != self._chave_atual(org["cnpj"]).chave_publica:
             raise ErroElo("a chave informada não é a chave desta organização")

@@ -378,13 +378,13 @@ async function roteiro() {
   await p.capturar("historico");
   for (const cp of cps) {
     const rel = await http("GET", `/compromissos/${cp.id}/verificacao`);
-    if (!rel.valido || rel.verificacoes.length !== 14) falhar(`compromisso ${cp.id} inválido`);
+    if (!rel.valido || rel.verificacoes.length !== 15) falhar(`compromisso ${cp.id} inválido`);
   }
   await p.ir(`${BASE}/verificar/${cps[0].id}`);
   await p.aguardarTexto("COMPROMISSO VÁLIDO");
   await p.capturar("verificacao");
   await p.ir(`${BASE}/painel/#/mandatos`);
-  ok("2 compromissos, links certos, 14 de 14 checagens OK");
+  ok("2 compromissos, links certos, 15 de 15 checagens OK");
 
   console.log("8. Revogação de mandato");
   await p.aguardarTexto("Revogar mandato");

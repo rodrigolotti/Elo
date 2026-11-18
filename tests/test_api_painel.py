@@ -49,7 +49,7 @@ def test_entrar_com_desafio_assinado(api, sessao):
     d = desafio(api["cliente"])
     assert d["tipo"] == "desafio_sessao" and d["cnpj"] == CNPJ_TRANSP and len(d["nonce"]) >= 40
     r = api["cliente"].get("/organizacao", headers=sessao)
-    assert r.status_code == 200 and r.json()["cnpj"] == CNPJ_TRANSP
+    assert r.status_code == 200 and r.json()["cadastro"]["cnpj"] == CNPJ_TRANSP
 
 
 def test_desafio_vale_uma_vez_so(api):
@@ -140,7 +140,7 @@ def test_consultas_mostram_so_a_propria_organizacao(api, sessao):
     sessao_outra = entrar(c, chave_outra, outra)
     for rota in ("/agentes", "/mandatos", "/ofertas", "/compromissos"):
         assert c.get(rota, headers=sessao_outra).json() == []
-    assert c.get("/organizacao", headers=sessao_outra).json()["cnpj"] == outra
+    assert c.get("/organizacao", headers=sessao_outra).json()["cadastro"]["cnpj"] == outra
 
 
 def test_status_invalido_na_consulta_vira_422(api, sessao):

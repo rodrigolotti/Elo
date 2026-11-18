@@ -94,7 +94,8 @@ class Sessoes:
         if pendente is None:
             raise NaoAutenticado("desafio desconhecido, já usado ou expirado: peça outro")
         org = self._plataforma()._org(pendente.cnpj)
-        if not verificar_assinatura(assinado, org["chave_publica"]):
+        chave = self._plataforma()._chave_atual(org["cnpj"]).chave_publica
+        if not verificar_assinatura(assinado, chave):
             raise NaoAutenticado("a assinatura não confere com a chave da organização")
         token = secrets.token_urlsafe(32)
         expira = self._agora() + VALIDADE_SESSAO
@@ -114,3 +115,9 @@ class Sessoes:
 
     def encerrar(self, token: str) -> None:
         self._sessoes.pop(hash_token(token), None)
+
+    def encerrar_da_organizacao(self, cnpj: str) -> None:
+        """Depois de trocar a chave: ninguém continua logado com a chave antiga."""
+        for tabela in (self._sessoes, self._desafios):
+            for chave in [c for c, p in tabela.items() if p.cnpj == cnpj]:
+                del tabela[chave]

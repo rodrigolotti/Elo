@@ -101,6 +101,20 @@ class PrepararRecusa(_Corpo):
     motivo: str = Field(default="", max_length=1000)
 
 
+class PrepararRecuperacao(_Corpo):
+    cnpj: str
+    chave_id: str = Field(min_length=1, max_length=100)
+    chave_publica: str = Field(description="Chave pública Ed25519 de recuperação, em base64")
+
+
+class PrepararRotacao(_Corpo):
+    cnpj: str
+    chave_id: str = Field(min_length=1, max_length=100)
+    chave_publica: str = Field(description="Nova chave pública principal, em base64")
+    recuperacao_chave_id: str = Field(min_length=1, max_length=100)
+    recuperacao_chave_publica: str = Field(description="Nova chave pública de recuperação")
+
+
 class PedirDesafio(_Corpo):
     cnpj: str
 
@@ -260,8 +274,9 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
 
     @app.get("/organizacao", tags=["consulta"])
     def minha_organizacao(cnpj: Logado) -> dict[str, Any]:
+        """Cadastro, chave vigente, chave de recuperação e histórico de chaves."""
         with trava:
-            return plat()._org(cnpj)
+            return plat().resumo_organizacao(cnpj)
 
     @app.get("/agentes", tags=["consulta"])
     def listar_agentes(cnpj: Logado) -> list[dict[str, Any]]:
@@ -295,6 +310,37 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
     def cadastrar_organizacao(assinado: dict[str, Any] = ObjetoAssinado) -> dict[str, Any]:
         with trava:
             return plat().registrar_assinado(assinado, "organizacao")
+
+    @app.post("/organizacoes/recuperacao/rascunho", tags=["organização"])
+    def preparar_recuperacao(corpo: PrepararRecuperacao) -> dict[str, Any]:
+        """Define ou troca a chave de recuperação. Assinado pela chave principal."""
+        with trava:
+            return {"rascunho": plat().preparar_recuperacao(
+                corpo.cnpj, corpo.chave_id, corpo.chave_publica)}
+
+    @app.post("/organizacoes/recuperacao", status_code=201, tags=["organização"])
+    def definir_recuperacao(assinado: dict[str, Any] = ObjetoAssinado) -> dict[str, Any]:
+        with trava:
+            return plat().registrar_assinado(assinado, "recuperacao_chave")
+
+    @app.post("/organizacoes/rotacao/rascunho", tags=["organização"])
+    def preparar_rotacao(corpo: PrepararRotacao) -> dict[str, Any]:
+        """Troca a chave principal. Assinado pela chave de RECUPERAÇÃO vigente.
+
+        Não exige sessão: é o caminho de quem perdeu a chave principal.
+        """
+        with trava:
+            return {"rascunho": plat().preparar_rotacao(
+                corpo.cnpj, corpo.chave_id, corpo.chave_publica,
+                corpo.recuperacao_chave_id, corpo.recuperacao_chave_publica)}
+
+    @app.post("/organizacoes/rotacao", status_code=201, tags=["organização"])
+    def rotacionar_chave(assinado: dict[str, Any] = ObjetoAssinado) -> dict[str, Any]:
+        """Grava a rotação e encerra as sessões e desafios abertos da organização."""
+        with trava:
+            gravado = plat().registrar_assinado(assinado, "rotacao_chave")
+            sessoes.encerrar_da_organizacao(gravado["cnpj"])
+            return gravado
 
     # ----- agente -----
 
@@ -415,7 +461,7 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
     @app.get("/verificar/{compromisso_id}", response_class=HTMLResponse,
              tags=["verificação"])
     def pagina_verificacao(compromisso_id: str) -> HTMLResponse:
-        """Página pública, em português, com as 14 checagens e o resultado."""
+        """Página pública, em português, com as 15 checagens e o resultado."""
         with trava:
             relatorio = plat().verificar_compromisso(compromisso_id)
             resumo = _resumo(plat(), compromisso_id)

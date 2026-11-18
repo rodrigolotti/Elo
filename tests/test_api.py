@@ -116,7 +116,7 @@ def test_fluxo_completo_pela_api(api):
     assert all(v["ok"] for v in rel["verificacoes"])
 
 
-def test_pagina_publica_mostra_14_checagens_ok(api):
+def test_pagina_publica_mostra_todas_as_checagens_ok(api):
     _, emitida = emitir(api)
     cp_id = aceitar(api, emitida["oferta"]["id"]).json()["id"]
     r = api["cliente"].get(f"/verificar/{cp_id}")
@@ -124,7 +124,7 @@ def test_pagina_publica_mostra_14_checagens_ok(api):
     assert r.headers["content-type"].startswith("text/html")
     assert 'lang="pt-BR"' in r.text
     assert "COMPROMISSO VÁLIDO" in r.text
-    assert status_na_pagina(r.text) == ["OK"] * 14
+    assert status_na_pagina(r.text) == ["OK"] * len(CHECAGENS)
     for nome in CHECAGENS:
         assert nome in r.text
     assert "R$ 4.850,00" in r.text
@@ -398,7 +398,7 @@ def test_pagina_de_compromisso_inexistente(cliente):
     r = cliente.get("/verificar/cp_naoexiste")
     assert r.status_code == 404
     assert "COMPROMISSO INVÁLIDO" in r.text
-    assert len(status_na_pagina(r.text)) == 14
+    assert len(status_na_pagina(r.text)) == len(CHECAGENS)
     assert status_na_pagina(r.text)[0] == "OK"  # o registro em si está íntegro
     assert cliente.get("/compromissos/cp_naoexiste/verificacao").status_code == 404
 
@@ -449,7 +449,7 @@ def test_pagina_denuncia_adulteracao(api, plataforma):
     r = api["cliente"].get(f"/verificar/{cp_id}")
     assert "COMPROMISSO INVÁLIDO" in r.text
     estados = status_na_pagina(r.text)
-    assert len(estados) == 14 and estados[0] == "FALHA"
+    assert len(estados) == len(CHECAGENS) and estados[0] == "FALHA"
 
 
 # ---------- app padrão e script de demo ----------
@@ -474,7 +474,7 @@ def test_compromisso_continua_verificavel_depois_de_reiniciar_a_api(tmp_path, mo
         for cid in compromissos:
             rel = c.get(f"/compromissos/{cid}/verificacao").json()
             assert rel["valido"], [v for v in rel["verificacoes"] if not v["ok"]]
-            assert status_na_pagina(c.get(f"/verificar/{cid}").text) == ["OK"] * 14
+            assert status_na_pagina(c.get(f"/verificar/{cid}").text) == ["OK"] * len(CHECAGENS)
         # e continua aceitando operações novas sobre o mesmo registro
         assert len(demo_api.executar(c)) == 2
 
@@ -490,5 +490,5 @@ def test_script_de_demo_roda_contra_a_api(tmp_path, monkeypatch, capsys):
         assert len(compromissos) == 2
         for cid in compromissos:
             assert c.get(f"/compromissos/{cid}/verificacao").json()["valido"]
-            assert status_na_pagina(c.get(f"/verificar/{cid}").text) == ["OK"] * 14
+            assert status_na_pagina(c.get(f"/verificar/{cid}").text) == ["OK"] * len(CHECAGENS)
     assert "aguardando_aprovacao" in capsys.readouterr().out
