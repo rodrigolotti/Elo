@@ -27,6 +27,11 @@ from .servico import ErroElo, Plataforma, hash_token
 
 VALIDADE_DESAFIO = timedelta(minutes=5)
 VALIDADE_SESSAO = timedelta(minutes=30)
+MAX_DESAFIOS_POR_CNPJ = 5
+"""Teto de desafios pendentes por organização. Passou do teto, o mais antigo é
+descartado (em vez de recusar o novo): assim quem pede desafios em massa não
+consegue impedir a organização de entrar, e a memória fica limitada a
+organizações cadastradas × este número."""
 
 
 class NaoAutenticado(Exception):
@@ -68,6 +73,10 @@ class Sessoes:
             "emitido_em": agora.isoformat(timespec="seconds"),
             "expira_em": expira.isoformat(timespec="seconds"),
         }
+        do_cnpj = [c for c, p in self._desafios.items() if p.cnpj == org["cnpj"]]
+        excesso = max(0, len(do_cnpj) - MAX_DESAFIOS_POR_CNPJ + 1)
+        for antigo in do_cnpj[:excesso]:
+            del self._desafios[antigo]  # dict mantém a ordem de inclusão
         self._desafios[hash_sha256(desafio)] = _Pendente(org["cnpj"], expira)
         return desafio
 

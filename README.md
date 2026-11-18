@@ -293,7 +293,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores.
 - **Validade jurídica:** a assinatura Ed25519 própria não é certificado ICP-Brasil. Antes de um piloto real, valide com um advogado.
 - **Desempenho:** a verificação relê o registro inteiro. Isso basta para a V1, mas exige índices e snapshots em escala.
-- **As consultas exigem sessão, mas as rotas de escrita não.** O que importa é protegido por assinatura (organização e agente) ou pelo token de aceite, mas qualquer um consegue, por exemplo, registrar pedidos ou pedir rascunhos. Os pedidos de desafio também não têm limite por enquanto.
+- **As consultas exigem sessão, mas as rotas de escrita não.** O que importa é protegido por assinatura (organização e agente) ou pelo token de aceite, mas qualquer um consegue, por exemplo, registrar pedidos ou pedir rascunhos. Os desafios de login têm teto de 5 pendentes por organização: passou disso, o mais antigo é descartado.
 - **Perder a chave da organização no navegador é irreversível nesta versão.** A chave de recuperação vem na próxima etapa.
 - **O navegador pode negar o armazenamento persistente.** Nesse caso ele pode apagar o IndexedDB se faltar espaço, e o painel avisa quando isso acontece.
 - **Sessões ficam na memória.** Se a API reiniciar, é preciso entrar de novo no painel.

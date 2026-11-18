@@ -201,3 +201,43 @@ def test_recusa_de_oferta_inexistente_vira_404(api):
     r = api["cliente"].post("/ofertas/of_naoexiste/recusa/rascunho",
                             json={"recusado_por": "Ana Gestora"})
     assert r.status_code == 404
+
+
+def test_desafios_pendentes_tem_teto_por_cnpj(api, cliente):
+    from elo.sessoes import MAX_DESAFIOS_POR_CNPJ
+
+    c, chave = api["cliente"], api["chave_org"]
+    desafios = [desafio(c) for _ in range(MAX_DESAFIOS_POR_CNPJ + 3)]
+    sessoes = c.app.state.sessoes
+    assert sum(p.cnpj == CNPJ_TRANSP for p in sessoes._desafios.values()) \
+        == MAX_DESAFIOS_POR_CNPJ
+    # os mais antigos foram descartados; os mais novos continuam valendo
+    for antigo in desafios[:3]:
+        assert c.post("/sessoes", json=chave.assinar(antigo)).status_code == 401
+    assert c.post("/sessoes", json=chave.assinar(desafios[-1])).status_code == 201
+    assert c.post("/sessoes", json=chave.assinar(desafios[3])).status_code == 201
+
+
+def test_teto_de_desafios_de_um_cnpj_nao_afeta_outro(api):
+    from elo.sessoes import MAX_DESAFIOS_POR_CNPJ
+
+    c = api["cliente"]
+    outra, chave_outra = cnpj_ficticio("998887770001"), ParDeChaves.gerar("outra#k1")
+    _, r = assinar_e_enviar(c, "/organizacoes/rascunho", {
+        "cnpj": outra, "razao_social": "Outra Transportadora Ltda",
+        "chave_id": chave_outra.chave_id, "chave_publica": chave_outra.publica_b64,
+    }, chave_outra, "/organizacoes")
+    assert r.status_code == 201
+    pendente_da_outra = desafio(c, outra)
+    for _ in range(MAX_DESAFIOS_POR_CNPJ * 4):
+        desafio(c)  # alguém pedindo desafios em massa para a primeira
+    assert c.post("/sessoes", json=chave_outra.assinar(pendente_da_outra)).status_code == 201
+
+
+def test_abaixo_do_teto_nenhum_desafio_e_descartado(api):
+    from elo.sessoes import MAX_DESAFIOS_POR_CNPJ
+
+    c, chave = api["cliente"], api["chave_org"]
+    desafios = [desafio(c) for _ in range(MAX_DESAFIOS_POR_CNPJ)]
+    for d in desafios:
+        assert c.post("/sessoes", json=chave.assinar(d)).status_code == 201
