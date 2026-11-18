@@ -31,7 +31,15 @@ class ErroCanonico(ValueError):
     """Valor que não pode ser serializado de forma canônica."""
 
 
+def _exigir_unicode_valido(s: str) -> None:
+    # Surrogate solto (ex.: "\ud800" num JSON) não tem forma UTF-8: recusa com
+    # ErroCanonico em vez de deixar o encode estourar mais adiante.
+    if any(0xD800 <= ord(ch) <= 0xDFFF for ch in s):
+        raise ErroCanonico(f"texto com surrogate UTF-16 solto: {s!r}")
+
+
 def _string(s: str) -> str:
+    _exigir_unicode_valido(s)
     partes = ['"']
     for ch in s:
         if ch in _ESCAPES_CURTOS:
@@ -66,6 +74,7 @@ def _valor(v: Any) -> str:
         for k in v:
             if not isinstance(k, str):
                 raise ErroCanonico(f"chave de objeto precisa ser texto: {k!r}")
+            _exigir_unicode_valido(k)
         chaves = sorted(v, key=lambda k: k.encode("utf-16-be"))
         return "{" + ",".join(_string(k) + ":" + _valor(v[k]) for k in chaves) + "}"
     raise ErroCanonico(f"tipo não suportado: {type(v).__name__}")
