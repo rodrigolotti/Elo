@@ -9,7 +9,7 @@ from test_api import (  # noqa: F401  (fixtures)
     aceitar, api, assinar_e_enviar, cliente, emitir, plataforma,
 )
 
-PUBLICAS = {"/verificar/{compromisso_id}", "/compromissos/{compromisso_id}/verificacao",
+PUBLICAS = {"/", "/verificar/{compromisso_id}", "/compromissos/{compromisso_id}/verificacao",
             "/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
 
 

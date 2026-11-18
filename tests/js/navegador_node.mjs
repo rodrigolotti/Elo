@@ -33,6 +33,12 @@ const operacoes = {
     await crypto.subtle.exportKey("pkcs8", par.privateKey); // deve falhar
     return { exportou: true };
   },
+  // chama uma função pura de um módulo do painel (formatos.js, conferencia.js...)
+  async chamar({ modulo, funcao, args }) {
+    if (!/^[a-z]+\.js$/.test(modulo)) throw new Error(`módulo inválido: ${modulo}`);
+    const m = await import(`../../elo/painel/js/${modulo}`);
+    return { valor: await m[funcao](...args) };
+  },
   async assinar({ nome, objeto }) {
     const { par, chaveId } = chaves.get(nome);
     return { assinado: await assinar(objeto, par.privateKey, chaveId) };

@@ -16,6 +16,9 @@ o cliente pede um desafio, assina com a chave da organização e recebe um
 token (cabeçalho "Authorization: Bearer <token>"). Cada sessão só enxerga os
 dados da própria organização. Fora isso, só a verificação é pública.
 
+O painel web da transportadora (elo/painel) é servido em /painel. Ele gera e
+usa a chave da organização só no navegador e fala com esta mesma API.
+
 Subir:  uvicorn elo.api:app --reload
 Banco:  variável ELO_DB (padrão: elo.db na pasta atual).
 """
@@ -23,17 +26,20 @@ Banco:  variável ELO_DB (padrão: elo.db na pasta atual).
 from __future__ import annotations
 
 import html
+import mimetypes
 import os
 import re
 import threading
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Any, AsyncIterator, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Body, Depends, FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from .canonico import hash_sha256
@@ -108,6 +114,33 @@ class Aceite(_Corpo):
     cnpj: str = Field(description="CNPJ do embarcador destinatário da oferta")
     nome: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=200)
+
+
+# ---------- painel web ----------
+
+PASTA_PAINEL = Path(__file__).parent / "painel"
+
+# No Windows o registro pode associar .js a text/plain, e o navegador recusa
+# módulos JavaScript servidos assim.
+mimetypes.add_type("text/javascript", ".js")
+
+# O painel usa a chave da organização: um script estranho na página conseguiria
+# usá-la (não copiá-la). Por isso só roda script servido daqui, sem inline.
+CABECALHOS_PAINEL = {
+    "Content-Security-Policy": "; ".join([
+        "default-src 'none'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-cache",
+}
 
 
 # ---------- sessão ----------
@@ -185,6 +218,20 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
     async def _nao_autenticado(_: Request, erro: NaoAutenticado) -> JSONResponse:
         return JSONResponse({"detail": str(erro)}, status_code=401,
                             headers={"WWW-Authenticate": "Bearer"})
+
+    @app.middleware("http")
+    async def _cabecalhos_do_painel(request: Request, call_next):  # type: ignore[no-untyped-def]
+        resposta = await call_next(request)
+        caminho = request.url.path
+        if caminho == "/painel" or caminho.startswith("/painel/"):
+            resposta.headers.update(CABECALHOS_PAINEL)
+        return resposta
+
+    app.mount("/painel", StaticFiles(directory=PASTA_PAINEL, html=True), name="painel")
+
+    @app.get("/", include_in_schema=False)
+    def inicio() -> RedirectResponse:
+        return RedirectResponse("/painel/")
 
     def plat() -> Plataforma:
         return app.state.plataforma
@@ -503,6 +550,7 @@ def _pagina(relatorio: Relatorio, resumo: list[tuple[str, str]]) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<link rel="icon" href="data:,">
 <title>Verificação do compromisso {cid} · Elo</title>
 <style>{_ESTILO}</style>
 </head>
