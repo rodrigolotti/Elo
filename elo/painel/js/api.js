@@ -31,6 +31,12 @@ function guardarSessao(dados) {
   sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(dados));
 }
 
+/** Atualiza o nome mostrado no topo (depois de uma recuperação). */
+export function definirRazaoSocial(razaoSocial) {
+  const atual = sessao();
+  if (atual) guardarSessao({ ...atual, razaoSocial });
+}
+
 export function esquecerSessao() {
   sessionStorage.removeItem(CHAVE_SESSAO);
 }

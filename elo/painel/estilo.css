@@ -175,3 +175,27 @@ dialog::backdrop { background: rgba(29, 35, 48, .45); }
 .dialogo-corpo .acoes { margin-top: 8px; }
 
 .rodape { color: var(--suave); font-size: .82rem; text-align: center; padding: 18px 20px 26px; }
+
+/* ---------- chave da organização: recuperação ---------- */
+
+[hidden] { display: none !important; }
+.erro { background: var(--ruim-fundo); color: var(--ruim-texto); border: 1px solid var(--ruim-borda); }
+.erro-cartao:empty { display: none; }
+.erro-cartao .caixa { margin: 14px 0 0; }
+.links { display: flex; gap: 24px; flex-wrap: wrap; }
+.acoes.centro { justify-content: center; }
+.etapa { margin-top: 8px; }
+.passo-recuperacao { display: grid; gap: 12px; }
+.passo-recuperacao > p { margin: 0; }
+.frase-senha {
+  font-family: var(--mono); font-size: 1.45rem; font-weight: 700; letter-spacing: .08em;
+  text-align: center; padding: 18px 12px; border-radius: var(--raio);
+  background: var(--cabeca-tabela); border: 2px dashed #b6bfcc; word-break: break-all;
+  user-select: all;
+}
+.grupos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grupos input { text-transform: uppercase; letter-spacing: .1em; font-size: 1.1rem; }
+td.ok { color: #15803d; font-weight: 700; }
+.confirmacao .ajuda { display: block; font-weight: 400; margin-top: 4px; }
+section > .cartao + .cartao, .passo-recuperacao + .cartao { margin-top: 16px; }
+td.falha { color: var(--ruim); font-weight: 700; }

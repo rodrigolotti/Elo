@@ -56,6 +56,20 @@ export function guardarChave({ cnpj, razaoSocial, chaveId, par, chavePublica }) 
   }));
 }
 
+/**
+ * Troca a chave guardada de uma organização (só na recuperação: a chave nova
+ * entra antes de a troca valer no servidor, e a anterior volta se ela falhar).
+ */
+export function substituirChave({ cnpj, razaoSocial, chaveId, par, chavePublica,
+                                  privada, publica, criadaEm }) {
+  // aceita um registro novo (com par) ou um lido do cofre (para restaurá-lo)
+  return transacao("readwrite", (loja) => loja.put({
+    cnpj, razaoSocial, chaveId, chavePublica,
+    privada: par?.privateKey ?? privada, publica: par?.publicKey ?? publica,
+    criadaEm: criadaEm ?? new Date().toISOString(),
+  }));
+}
+
 /** Registro guardado de uma organização, ou undefined. */
 export function lerChave(cnpj) {
   return transacao("readonly", (loja) => loja.get(cnpj));

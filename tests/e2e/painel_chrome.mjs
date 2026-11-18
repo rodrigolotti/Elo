@@ -3,9 +3,11 @@
 //   node tests/e2e/painel_chrome.mjs [pasta-das-capturas]
 //
 // Sobe a API com um banco temporário, abre o Chrome com um perfil vazio e
-// percorre as telas como uma pessoa: cadastro, agente, mandato, aprovação,
-// recusa, histórico, revogação, sair e entrar de novo. Este script faz o papel
-// do agente (emite ofertas) e do embarcador (aceita pelo link).
+// percorre as telas como uma pessoa: cadastro (com o arquivo de recuperação),
+// agente, mandato, aprovação, recusa, histórico, revogação, sair e entrar de
+// novo, e a recuperação da chave num "outro computador" (um segundo contexto do
+// navegador, com IndexedDB próprio). Este script faz o papel do agente (emite
+// ofertas) e do embarcador (aceita pelo link).
 //
 // Confere também: chave no IndexedDB não exportável, nenhum erro de console
 // ou de CSP, e nenhum corpo enviado ao servidor com chave privada.
@@ -13,7 +15,9 @@
 // Variáveis: CHROME (caminho do navegador), PYTHON (padrão: python).
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assinar, chavePublicaBase64, gerarParDeChaves } from "../../elo/painel/js/assinatura.js";
@@ -24,6 +28,10 @@ const BASE = `http://127.0.0.1:${PORTA_API}`;
 const CAPTURAS = process.argv[2] ?? join(tmpdir(), "elo-e2e-capturas");
 const temporario = mkdtempSync(join(tmpdir(), "elo-e2e-"));
 mkdirSync(CAPTURAS, { recursive: true });
+const DOWNLOADS1 = join(temporario, "downloads-computador-1");
+const DOWNLOADS2 = join(temporario, "downloads-computador-2");
+mkdirSync(DOWNLOADS1);
+mkdirSync(DOWNLOADS2);
 
 const CHROME = process.env.CHROME ?? [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -88,13 +96,21 @@ class Pagina {
     ws.addEventListener("message", (m) => this.receber(JSON.parse(m.data)));
   }
 
-  static async abrir() {
-    const [alvo] = (await (await fetch(`http://127.0.0.1:${PORTA_CDP}/json/list`)).json())
-      .filter((t) => t.type === "page");
-    const ws = new WebSocket(alvo.webSocketDebuggerUrl);
+  static async conectar(url) {
+    const ws = new WebSocket(url);
     await new Promise((r, e) => { ws.onopen = r; ws.onerror = e; });
-    const pagina = new Pagina(ws);
-    for (const dominio of ["Page", "Runtime", "Log", "Network"]) await pagina.cdp(`${dominio}.enable`);
+    return new Pagina(ws);
+  }
+
+  // sem targetId: a primeira aba do navegador
+  static async abrir(targetId) {
+    const url = targetId ? `ws://127.0.0.1:${PORTA_CDP}/devtools/page/${targetId}`
+      : (await (await fetch(`http://127.0.0.1:${PORTA_CDP}/json/list`)).json())
+        .find((t) => t.type === "page").webSocketDebuggerUrl;
+    const pagina = await Pagina.conectar(url);
+    for (const dominio of ["Page", "Runtime", "Log", "Network", "DOM"]) {
+      await pagina.cdp(`${dominio}.enable`);
+    }
     await pagina.cdp("Emulation.setDeviceMetricsOverride",
       { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
     return pagina;
@@ -173,12 +189,26 @@ class Pagina {
     })()`);
   }
 
+  async escolherArquivo(seletor, caminho) {
+    const { root } = await this.cdp("DOM.getDocument", { depth: -1 });
+    const { nodeId } = await this.cdp("DOM.querySelector", { nodeId: root.nodeId, selector: seletor });
+    await this.cdp("DOM.setFileInputFiles", { nodeId, files: [caminho] });
+  }
+
   // clica num item do menu pelo endereço (o texto pode ter o contador junto)
   menu(rota) {
     return this.avaliar(`document.querySelector('nav a[href="#${rota}"]').click()`);
   }
 
+  // nenhum "null" ou "undefined" vazando para a tela
+  async semLixoNaTela() {
+    const lixo = await this.avaliar(`document.body.innerText.split("\\n")
+      .map((l) => l.trim()).filter((l) => ["null", "undefined", "NaN", "[object Object]"].includes(l))`);
+    if (lixo.length) falhar(`texto indevido na tela: ${JSON.stringify(lixo)}`);
+  }
+
   async capturar(nome) {
+    await this.semLixoNaTela();
     await esperar(150);
     const { data } = await this.cdp("Page.captureScreenshot",
       { format: "png", captureBeyondViewport: true });
@@ -220,6 +250,66 @@ const aceitar = (oferta) => http("POST", `/ofertas/${oferta.oferta.id}/aceite`, 
   email: "maria@exemplo.com",
 });
 
+// ---------- arquivo de recuperação e mandato pela tela ----------
+
+async function aguardarDownload(pasta, limite = 10000) {
+  const fim = Date.now() + limite;
+  while (Date.now() < fim) {
+    const prontos = readdirSync(pasta).filter((n) => n.endsWith(".json"));
+    if (prontos.length) return join(pasta, prontos[0]);
+    await esperar(100);
+  }
+  falhar(`o arquivo de recuperação não foi baixado em ${pasta}`);
+}
+
+// baixa o arquivo, avança e digita os dois grupos sorteados da frase
+async function guardarRecuperacao(p, pasta, frase, testarGruposErrados) {
+  await p.clicar("Baixar arquivo de recuperação");
+  const arquivo = await aguardarDownload(pasta);
+  await p.clicar("Já anotei a frase e guardei o arquivo");
+  await p.aguardar("document.querySelectorAll('input[data-grupo]').length === 2");
+  const indices = await p.avaliar(
+    "[...document.querySelectorAll('input[data-grupo]')].map((e) => Number(e.dataset.grupo))");
+  if (testarGruposErrados) {
+    await p.preencher("input[data-grupo]", "ZZZZZ", 0);
+    await p.preencher("input[data-grupo]", "ZZZZZ", 1);
+    await p.clicar("Confirmar");
+    await p.aguardarTexto("Os grupos não conferem com a frase-senha");
+    await p.capturar("grupos-errados");
+    if (await p.avaliar("document.querySelectorAll('input[data-grupo]').length") !== 2) {
+      falhar("concluiu com os grupos errados");
+    }
+  }
+  const grupos = frase.split("-");
+  await p.preencher("input[data-grupo]", grupos[indices[0] - 1].toLowerCase(), 0);
+  await p.preencher("input[data-grupo]", ` ${grupos[indices[1] - 1]} `, 1);
+  await p.clicar("Confirmar");
+  return arquivo;
+}
+
+async function emitirMandatoPelaTela(p, captura) {
+  await p.menu("/mandatos");
+  await p.aguardarTexto("Novo mandato");
+  await p.avaliar(`(() => { const s = document.querySelector("form select");
+    s.selectedIndex = 1; s.dispatchEvent(new Event("change")); })()`);
+  await p.preencher("form input[inputmode=decimal]", "6.000,00");
+  await p.avaliar(`(() => {
+    const [origem, destino] = document.querySelectorAll("fieldset.ufs");
+    origem.querySelector("input[value=SP]").checked = true;
+    destino.querySelector("input[value=SP]").checked = true;
+    destino.querySelector("input[value=PR]").checked = true;
+  })()`);
+  await p.preencher("form textarea", "carga geral");
+  if (captura) await p.capturar(captura);
+  await p.clicar("Assinar mandato");
+  await p.aguardarTexto("emitido.");
+  await p.aguardar("[...document.querySelectorAll('.etiqueta.bom')].some((e) => e.textContent === 'Ativo')");
+}
+
+const tokenDa = (p) => p.avaliar(`JSON.parse(sessionStorage.getItem("elo.sessao")).token`);
+const comToken = (token, rota) =>
+  fetch(BASE + rota, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+
 // ---------- roteiro ----------
 
 async function roteiro() {
@@ -233,6 +323,9 @@ async function roteiro() {
     "--no-default-browser-check", "--disable-extensions", "about:blank"]);
   await aguardarUrl(`http://127.0.0.1:${PORTA_CDP}/json/version`);
   const p = await Pagina.abrir();
+  const versao = await (await fetch(`http://127.0.0.1:${PORTA_CDP}/json/version`)).json();
+  const navegador = await Pagina.conectar(versao.webSocketDebuggerUrl);
+  await navegador.cdp("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: DOWNLOADS1 });
 
   console.log("1. Entrar sem chave no navegador");
   await p.ir(`${BASE}/painel/`);
@@ -251,9 +344,16 @@ async function roteiro() {
   if (bloqueado !== "#/cadastro") falhar("enviou sem marcar o 'Entendi'");
   await p.avaliar(`document.querySelector(".confirmacao input").checked = true`);
   await p.clicar("Gerar chave e cadastrar");
-  await p.aguardar("location.hash === '#/agentes'");
+  await p.aguardar("document.querySelector('.frase-senha')", 15000);
   await p.aguardarTexto("Transportadora Fictícia Ltda");
   ok("organização cadastrada, sessão aberta");
+  const frase1 = await p.avaliar("document.querySelector('.frase-senha').textContent");
+  if (!/^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){4}$/.test(frase1)) falhar(`frase: ${frase1}`);
+  await p.aguardarTexto("Anote a frase-senha em papel e guarde separada do arquivo.");
+  await p.capturar("frase-senha");
+  const arquivo1 = await guardarRecuperacao(p, DOWNLOADS1, frase1, true);
+  await p.aguardar("location.hash === '#/agentes'");
+  ok("frase mostrada, arquivo baixado; grupos errados não concluem, certos concluem");
 
   const chave = await p.avaliar(`new Promise((ok, erro) => {
     const pedido = indexedDB.open("elo-painel");
@@ -293,22 +393,7 @@ async function roteiro() {
   ok("chave inválida recusada no formulário; agente criado");
 
   console.log("4. Definição de mandato");
-  await p.menu("/mandatos");
-  await p.aguardarTexto("Novo mandato");
-  await p.avaliar(`(() => { const s = document.querySelector("form select");
-    s.selectedIndex = 1; s.dispatchEvent(new Event("change")); })()`);
-  await p.preencher("form input[inputmode=decimal]", "6.000,00");
-  await p.avaliar(`(() => {
-    const [origem, destino] = document.querySelectorAll("fieldset.ufs");
-    origem.querySelector("input[value=SP]").checked = true;
-    destino.querySelector("input[value=SP]").checked = true;
-    destino.querySelector("input[value=PR]").checked = true;
-  })()`);
-  await p.preencher("form textarea", "carga geral");
-  await p.capturar("mandato-formulario");
-  await p.clicar("Assinar mandato");
-  await p.aguardarTexto("emitido.");
-  await p.aguardar("document.querySelector('.etiqueta.bom')?.textContent === 'Ativo'");
+  await emitirMandatoPelaTela(p, "mandato-formulario");
   ok("mandato emitido e ativo");
 
   // o agente (fora do navegador) pega os ids pela própria API
@@ -409,15 +494,108 @@ async function roteiro() {
   await p.aguardar("location.hash === '#/aprovacoes'");
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
   ok("saiu (token encerrado) e entrou de novo assinando o desafio");
+  await p.menu("/seguranca");
+  await p.aguardarTexto("Histórico de chaves");
+  await p.capturar("seguranca");
+  await emitirMandatoPelaTela(p);
+  const [{ mandato: { id: mandato2Id } }] = (await comToken(await tokenDa(p), "/mandatos"))
+    .filter((m) => !m.revogado_em);
+  ok(`segundo mandato ativo (${mandato2Id}), para a recuperação revogar`);
 
-  console.log("10. Conferências finais");
-  const comPrivada = p.corpos.filter(({ corpo }) =>
-    /privad|private|pkcs8|"d"\s*:|"jwk"/i.test(corpo));
+  console.log("10. Recuperação em outro computador");
+  const { browserContextId } = await navegador.cdp("Target.createBrowserContext");
+  await navegador.cdp("Browser.setDownloadBehavior",
+    { behavior: "allow", downloadPath: DOWNLOADS2, browserContextId });
+  const { targetId } = await navegador.cdp("Target.createTarget",
+    { url: "about:blank", browserContextId });
+  const p2 = await Pagina.abrir(targetId);
+  await p2.ir(`${BASE}/painel/`);
+  await p2.aguardarTexto("Nenhuma organização tem chave neste navegador.");
+  await p2.clicar("Recuperar com o arquivo");
+  await p2.aguardarTexto("1. Abrir o arquivo de recuperação");
+  await p2.escolherArquivo("input[type=file]", arquivo1);
+  await p2.preencher("input[name=frase]", "ABCDE-FGHJK-MNPQR-STVWX-YZ012");
+  await p2.clicar("Abrir arquivo");
+  await p2.aguardarTexto(
+    "Não foi possível abrir o arquivo: a frase-senha está errada ou o arquivo foi alterado");
+  await p2.capturar("recuperar-frase-errada");
+  ok("frase errada: mensagem clara na tela, nada muda");
+
+  await p2.preencher("input[name=frase]", frase1.toLowerCase());
+  await p2.clicar("Abrir arquivo");
+  await p2.aguardar("document.querySelector('.frase-senha')", 15000);
+  const frase2 = await p2.avaliar("document.querySelector('.frase-senha').textContent");
+  if (frase2 === frase1) falhar("a nova frase deveria ser outra");
+  await guardarRecuperacao(p2, DOWNLOADS2, frase2, false);
+  await p2.aguardar("document.querySelector('input[name=revogar]')?.offsetParent");
+  if (!(await p2.avaliar("document.querySelector('input[name=revogar]').checked"))) {
+    falhar("'Revogar todos os mandatos ativos' deveria vir marcado");
+  }
+  await p2.capturar("recuperar-trocar");
+  await p2.clicar("Trocar a chave da organização");
+  await p2.aguardar("location.hash === '#/mandatos'", 20000);
+  await p2.aguardar("document.querySelectorAll('.etiqueta').length === 2 && "
+    + "[...document.querySelectorAll('.etiqueta')].every((e) => e.textContent === 'Revogado')");
+  await p2.capturar("recuperado-mandatos-revogados");
+  ok("chave trocada; 'revogar mandatos' veio marcado e os 2 mandatos estão revogados");
+
+  const chave2 = await p2.avaliar(`new Promise((ok) => {
+    indexedDB.open("elo-painel").onsuccess = (e) => {
+      const g = e.target.result.transaction("chaves").objectStore("chaves").getAll();
+      g.onsuccess = () => ok({ extraivel: g.result[0].privada.extractable,
+                               publica: g.result[0].chavePublica });
+    };
+  })`);
+  if (chave2.extraivel !== false || chave2.publica === chave.chavePublica) {
+    falhar(`chave nova inesperada: ${JSON.stringify(chave2)}`);
+  }
+  const resumo = await comToken(await tokenDa(p2), "/organizacao");
+  if (resumo.chave_atual.chave_publica !== chave2.publica
+      || resumo.historico_chaves.map((e) => e.valido).join() !== "true,true") {
+    falhar(`histórico inesperado: ${JSON.stringify(resumo.historico_chaves)}`);
+  }
+  ok("chave nova não exportável no outro computador; histórico: recuperação definida e "
+     + "rotação, ambas OK");
+
+  const fora = await emitirOferta(agente, pedido.id, agenteId, mandato2Id, 100_000);
+  if (fora.status !== "aguardando_aprovacao" || !fora.violacoes.some((v) => v.includes("revogado"))) {
+    falhar(`oferta com mandato revogado na recuperação: ${JSON.stringify(fora.violacoes)}`);
+  }
+  ok("oferta nova com o mandato revogado na recuperação sai do mandato (vai para aprovação)");
+  for (const cp of cps) {
+    const rel = await http("GET", `/compromissos/${cp.id}/verificacao`);
+    if (!rel.valido || rel.verificacoes.length !== 15) falhar(`compromisso ${cp.id} inválido`);
+  }
+  ok("compromissos de antes da troca continuam com 15 de 15");
+
+  console.log("11. A chave antiga não entra mais");
+  await p.avaliar("sessionStorage.clear()");
+  await p.ir(`${BASE}/painel/#/entrar`);
+  await p.avaliar("location.reload()");
+  await p.aguardar("document.readyState === 'complete'");
+  await p.aguardarTexto("Transportadora Fictícia Ltda");
+  await p.clicar("Entrar");
+  await p.aguardarTexto("A chave guardada neste navegador não é mais a chave da organização");
+  await p.capturar("chave-antiga-recusada");
+  if (await p.avaliar("location.hash") !== "#/entrar") falhar("a chave antiga entrou");
+  // o 401 de POST /sessoes é o esperado aqui
+  p.problemas = p.problemas.filter((x) => !(x.includes("status of 401") && x.includes("/sessoes")));
+  ok("no primeiro computador, a chave antiga é recusada com mensagem clara");
+
+  console.log("12. Conferências finais");
+  const corpos = [...p.corpos, ...p2.corpos];
+  const comPrivada = corpos.filter(({ corpo }) =>
+    /privad|private|pkcs8|"d"\s*:|"jwk"|"cifra"|"kdf"/i.test(corpo));
   if (comPrivada.length) falhar(`corpo suspeito enviado: ${JSON.stringify(comPrivada)}`);
-  const publicaEnviada = p.corpos.some(({ corpo }) => corpo.includes(chave.chavePublica));
+  if (corpos.some(({ corpo }) => corpo.includes(frase1) || corpo.includes(frase2)
+      || corpo.includes(frase1.replaceAll("-", "")))) {
+    falhar("uma frase-senha foi enviada ao servidor");
+  }
+  const publicaEnviada = corpos.some(({ corpo }) => corpo.includes(chave.chavePublica));
   if (!publicaEnviada) falhar("a chave pública deveria ter ido no cadastro");
-  ok(`${p.corpos.length} requisições com corpo: nenhuma com chave privada`);
-  if (p.problemas.length) falhar(`erros no navegador:\n${p.problemas.join("\n")}`);
+  ok(`${corpos.length} requisições com corpo: nenhuma com chave privada, arquivo ou frase`);
+  const problemas = [...p.problemas, ...p2.problemas];
+  if (problemas.length) falhar(`erros no navegador:\n${problemas.join("\n")}`);
   ok("nenhum erro de console, exceção ou violação de CSP");
 }
 

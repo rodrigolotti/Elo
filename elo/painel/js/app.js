@@ -3,11 +3,17 @@
 import * as api from "./api.js";
 import { assinar, chavePublicaBase64, gerarParDeChaves, temEd25519 } from "./assinatura.js";
 import { hashSha256 } from "./canonico.js";
+import {
+  mensagemChaveAntiga, telaRecuperacaoDoCadastro, telaRecuperar, telaSeguranca,
+} from "./chave.js";
 import { conferirRascunho } from "./conferencia.js";
 import {
   apagarChave, guardarChave, listarChaves, pedirArmazenamentoPersistente,
 } from "./cofre.js";
 import { h, limpar } from "./dom.js";
+import {
+  avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
+} from "./ui.js";
 import {
   UFS, centavosDeReais, chavePublicaValida, dataBr, emBrasilia, isoDeBrasilia, lista,
   localDeBrasilia, reais, rota, soDigitos,
@@ -15,79 +21,6 @@ import {
 
 const topo = document.getElementById("topo");
 const conteudo = document.getElementById("conteudo");
-const avisos = document.getElementById("avisos");
-const dialogo = document.getElementById("dialogo");
-
-// ---------- avisos e diálogos ----------
-
-function avisar(texto, tipo = "ok") {
-  const aviso = h("div", { class: `aviso aviso-${tipo}`, role: tipo === "erro" ? "alert" : "status" },
-    h("span", {}, texto),
-    h("button", { class: "fechar", type: "button", "aria-label": "Fechar",
-                  onclick: () => aviso.remove() }, "×"));
-  avisos.append(aviso);
-  while (avisos.children.length > 3) avisos.firstElementChild.remove();
-  setTimeout(() => aviso.remove(), tipo === "ok" ? 5000 : 10000);
-}
-
-function avisarErro(erro) {
-  console.error(erro);
-  avisar(erro?.message ?? String(erro), "erro");
-}
-
-/**
- * Abre um diálogo de confirmação. `campos` são elementos extras (ex.: motivo).
- * Resolve true se a pessoa confirmar.
- */
-function confirmar({ titulo, corpo, botao, perigo = false, campos = [] }) {
-  return new Promise((resolve) => {
-    const form = h("form", { method: "dialog", class: "dialogo-corpo" },
-      h("h2", {}, titulo),
-      ...[corpo].flat().map((p) => (p instanceof Node ? p : h("p", {}, p))),
-      ...campos,
-      h("div", { class: "acoes" },
-        h("button", { type: "button", class: "botao secundario",
-                      onclick: () => dialogo.close("nao") }, "Cancelar"),
-        h("button", { type: "submit", value: "sim",
-                      class: `botao ${perigo ? "perigo" : "primario"}` }, botao)));
-    limpar(dialogo).append(form);
-    dialogo.addEventListener("close", () => resolve(dialogo.returnValue === "sim"),
-                             { once: true });
-    dialogo.returnValue = "";
-    dialogo.showModal();
-  });
-}
-
-/** Desabilita o botão enquanto a ação roda, para não assinar duas vezes. */
-async function executando(botao, acao) {
-  const texto = botao.textContent;
-  botao.disabled = true;
-  botao.textContent = "Assinando…";
-  try {
-    return await acao();
-  } finally {
-    botao.disabled = false;
-    botao.textContent = texto;
-  }
-}
-
-// ---------- pedaços reutilizados ----------
-
-const campo = (rotulo, controle, ajuda) =>
-  h("label", { class: "campo" }, h("span", { class: "rotulo" }, rotulo), controle,
-    ajuda ? h("span", { class: "ajuda" }, ajuda) : null);
-
-const dados = (pares) => h("dl", { class: "dados" },
-  pares.filter(Boolean).map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
-
-const mono = (texto) => h("span", { class: "mono" }, texto);
-
-const vazio = (texto, ...extra) => h("div", { class: "vazio" }, h("p", {}, texto), ...extra);
-
-function cabecalho(titulo, subtitulo) {
-  return h("div", { class: "cabecalho" }, h("h1", { tabindex: -1 }, titulo),
-    subtitulo ? h("p", { class: "subtitulo" }, subtitulo) : null);
-}
 
 function responsavelSalvo() {
   return localStorage.getItem("elo.responsavel") ?? "";
@@ -100,18 +33,23 @@ const MENU = [
   ["/agentes", "Agentes"],
   ["/mandatos", "Mandatos"],
   ["/historico", "Histórico"],
+  ["/seguranca", "Segurança"],
 ];
 
-function desenharTopo(caminho, pendentes) {
+function desenharTopo(caminho, pendentes, semRecuperacao) {
   const atual = api.sessao();
   limpar(topo).append(h("div", { class: "topo-dentro" },
     h("a", { class: "marca", href: atual ? "#/aprovacoes" : "#/entrar" },
-      h("span", { class: "marca-elo" }, "Elo"), h("span", { class: "marca-sub" }, "Painel da transportadora")),
+      h("span", { class: "marca-elo" }, "Elo"),
+      atual ? null : h("span", { class: "marca-sub" }, "Painel da transportadora")),
     atual ? h("nav", { "aria-label": "Seções" },
       MENU.map(([alvo, nome]) => h("a", {
         href: `#${alvo}`, class: alvo === caminho ? "ativo" : null,
         "aria-current": alvo === caminho ? "page" : null,
-      }, nome, alvo === "/aprovacoes" && pendentes ? h("span", { class: "contador" }, pendentes) : null)))
+      }, nome,
+      alvo === "/aprovacoes" && pendentes ? h("span", { class: "contador" }, pendentes) : null,
+      alvo === "/seguranca" && semRecuperacao
+        ? h("span", { class: "contador", title: "Sem chave de recuperação" }, "!") : null)))
       : null,
     atual ? h("div", { class: "quem" },
       h("span", { class: "quem-nome" }, atual.razaoSocial),
@@ -130,8 +68,10 @@ const ROTAS = {
   "/agentes": telaAgentes,
   "/mandatos": telaMandatos,
   "/historico": telaHistorico,
+  "/seguranca": telaSeguranca,
+  "/recuperar": () => telaRecuperar(conteudo),
 };
-const ABERTAS = new Set(["/entrar", "/cadastro"]);
+const ABERTAS = new Set(["/entrar", "/cadastro", "/recuperar"]);
 let navegacao = 0;
 
 async function navegar() {
@@ -151,8 +91,9 @@ async function navegar() {
     limpar(conteudo).append(no);
     conteudo.querySelector("h1")?.focus();
     if (logado) {
-      const pendentes = await api.obter("/ofertas?status=aguardando_aprovacao");
-      if (minha === navegacao) desenharTopo(caminho, pendentes.length);
+      const [pendentes, org] = await Promise.all([
+        api.obter("/ofertas?status=aguardando_aprovacao"), api.obter("/organizacao")]);
+      if (minha === navegacao) desenharTopo(caminho, pendentes.length, !org.recuperacao);
     }
   } catch (erro) {
     if (minha !== navegacao) return;
@@ -181,26 +122,34 @@ async function telaEntrar() {
   if (registros.length === 0) {
     secao.append(vazio("Nenhuma organização tem chave neste navegador.",
       h("p", { class: "ajuda" }, "Se a organização foi cadastrada em outro navegador, ou se os "
-        + "dados deste navegador foram apagados, a chave não está aqui. A recuperação de chave "
-        + "chega na próxima versão."),
-      h("a", { class: "botao primario", href: "#/cadastro" }, "Cadastrar organização")));
+        + "dados deste navegador foram apagados, a chave não está aqui. Use o arquivo de "
+        + "recuperação e a frase-senha para trocar a chave."),
+      h("div", { class: "acoes centro" },
+        h("a", { class: "botao secundario", href: "#/recuperar" }, "Recuperar com o arquivo"),
+        h("a", { class: "botao primario", href: "#/cadastro" }, "Cadastrar organização"))));
     return secao;
   }
   secao.append(h("div", { class: "lista-cartoes" }, registros.map((r) => {
     const botao = h("button", { type: "button", class: "botao primario" }, "Entrar");
+    const erro = h("div", { class: "erro-cartao" });
     botao.addEventListener("click", () => executando(botao, async () => {
+      limpar(erro);
       try {
         await api.entrar(r);
         location.hash = "#/aprovacoes";
-      } catch (erro) {
-        avisarErro(erro);
+      } catch (e) {
+        erro.append(h("div", { class: "caixa erro", role: "alert" }, mensagemChaveAntiga(e)));
       }
     }));
-    return h("article", { class: "cartao cartao-org" },
-      h("div", {}, h("h2", {}, r.razaoSocial), mono(r.cnpj),
-        h("p", { class: "ajuda" }, `Chave ${r.chaveId}, criada em ${emBrasilia(r.criadaEm)}`)),
-      botao);
-  })), h("p", {}, h("a", { href: "#/cadastro" }, "Cadastrar outra organização")));
+    return h("article", { class: "cartao" },
+      h("div", { class: "cartao-org" },
+        h("div", {}, h("h2", {}, r.razaoSocial), mono(r.cnpj),
+          h("p", { class: "ajuda" }, `Chave ${r.chaveId}, criada em ${emBrasilia(r.criadaEm)}`)),
+        botao),
+      erro);
+  })), h("p", { class: "links" },
+    h("a", { href: "#/recuperar" }, "Perdi a chave deste navegador ou estou em outro computador"),
+    h("a", { href: "#/cadastro" }, "Cadastrar outra organização")));
   return secao;
 }
 
@@ -212,17 +161,18 @@ function avisoPerdaDeChave() {
     h("p", {}, "Ao cadastrar, o navegador cria a chave privada da organização. Ela é marcada "
       + "como não exportável e nunca é enviada ao servidor: nem o Elo, nem este painel "
       + "conseguem copiá-la."),
-    h("p", {}, h("strong", {}, "Se ela se perder, nesta versão não há como recuperá-la."),
-      " Isso acontece se você limpar os dados de navegação ou do site, desinstalar o "
+    h("p", {}, "Ela se perde se você limpar os dados de navegação ou do site, desinstalar o "
       + "navegador, trocar de computador, usar janela anônima, ou, no Safari, ficar 7 dias "
       + "sem abrir o painel."),
-    h("p", {}, "Sem a chave, a organização não consegue mais criar agentes, emitir mandatos, "
-      + "aprovar ou recusar ofertas, nem ", h("strong", {}, "revogar um mandato"),
+    h("p", {}, h("strong", {}, "A única forma de recuperá-la é o arquivo de recuperação com a "
+      + "frase-senha,"), " que você cria no próximo passo. Sem eles, a organização não consegue "
+      + "mais criar agentes, emitir mandatos, aprovar ou recusar ofertas, nem ",
+      h("strong", {}, "revogar um mandato"),
       ". Os compromissos já firmados continuam válidos e verificáveis."),
     h("ul", {},
       h("li", {}, "Use um perfil de navegador só para o painel, em um computador da empresa."),
       h("li", {}, "Não use janela anônima e não limpe os dados deste site."),
-      h("li", {}, "A próxima versão traz uma chave de recuperação, guardada fora do navegador.")));
+      h("li", {}, "Guarde o arquivo de recuperação e a frase-senha em lugares separados.")));
 }
 
 async function telaCadastro() {
@@ -240,7 +190,8 @@ async function telaCadastro() {
     campo("Razão social", razao),
     avisoPerdaDeChave(),
     h("label", { class: "confirmacao" }, entendi,
-      h("span", {}, "Entendi que, nesta versão, perder a chave deste navegador é irreversível.")),
+      h("span", {}, "Entendi que, sem o arquivo de recuperação e a frase-senha, perder a chave "
+        + "deste navegador é irreversível.")),
     h("div", { class: "acoes" }, h("a", { class: "botao secundario", href: "#/entrar" }, "Voltar"),
       botao));
 
@@ -278,7 +229,8 @@ async function telaCadastro() {
           avisar("O navegador não garantiu armazenamento persistente: ele pode apagar a "
             + "chave se faltar espaço. Evite limpar os dados deste site.", "alerta");
         }
-        location.hash = "#/agentes";
+        desenharTopo("/cadastro", 0, true);
+        telaRecuperacaoDoCadastro(conteudo);
       } catch (erro) {
         if (cadastrado) await apagarChave(cadastrado).catch(() => {});
         avisarErro(erro);
