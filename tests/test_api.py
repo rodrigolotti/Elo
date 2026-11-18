@@ -306,6 +306,27 @@ def test_app_padrao_abre_banco_de_elo_db(tmp_path, monkeypatch):
     assert caminho.exists()
 
 
+def test_compromisso_continua_verificavel_depois_de_reiniciar_a_api(tmp_path, monkeypatch):
+    caminho = tmp_path / "persistente.db"
+    monkeypatch.setenv("ELO_DB", str(caminho))
+    with TestClient(criar_app()) as c:
+        compromissos = demo_api.executar(c)
+    # a API "caiu": a conexão foi fechada e a chave da plataforma sumiu da memória
+    assert caminho.stat().st_size > 0
+
+    with TestClient(criar_app()) as c:  # nova instância, nova chave de plataforma
+        for cid in compromissos:
+            rel = c.get(f"/compromissos/{cid}/verificacao").json()
+            assert rel["valido"], [v for v in rel["verificacoes"] if not v["ok"]]
+            assert status_na_pagina(c.get(f"/verificar/{cid}").text) == ["OK"] * 14
+        # e continua aceitando operações novas sobre o mesmo registro
+        assert len(demo_api.executar(c)) == 2
+
+    reaberto = Registro(str(caminho))
+    assert reaberto.verificar_integridade().integro
+    reaberto.conexao.close()
+
+
 def test_script_de_demo_roda_contra_a_api(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("ELO_DB", str(tmp_path / "demo.db"))
     with TestClient(criar_app()) as c:  # relógio real, como no uso de verdade

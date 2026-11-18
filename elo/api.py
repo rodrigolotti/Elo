@@ -107,9 +107,13 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
-        if getattr(app.state, "plataforma", None) is None:
+        propria = getattr(app.state, "plataforma", None) is None
+        if propria:
             app.state.plataforma = _plataforma_padrao()
         yield
+        if propria:  # fecha o banco que esta app abriu
+            app.state.plataforma.registro.conexao.close()
+            app.state.plataforma = None
 
     app = FastAPI(
         title="Elo",

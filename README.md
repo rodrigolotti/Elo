@@ -16,7 +16,7 @@ Requisitos: Python 3.11+, `pydantic` 2 e `cryptography`. Para a API, `fastapi`,
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 41 testes (19 do núcleo + 22 da API)
+python3 -m pytest -q     # 42 testes (19 do núcleo + 23 da API)
 ```
 
 ## API no Windows (cmd)
@@ -37,6 +37,10 @@ uvicorn elo.api:app --reload
 ```
 
 Para usar outro arquivo de banco, antes de subir: `set ELO_DB=C:\caminho\outro.db`.
+
+O registro fica nesse arquivo SQLite, não só na memória: ao reiniciar a API,
+organizações, mandatos, ofertas e compromissos continuam lá e verificáveis. Para
+começar do zero, pare a API e apague o `elo.db`.
 
 Com a API no ar, abra **um segundo** `cmd` na mesma pasta e rode a demo do cliente:
 
