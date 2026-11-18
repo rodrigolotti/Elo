@@ -1,5 +1,5 @@
 // Gera docs/verificacao.png: a página pública /verificar de um compromisso
-// da demo, do topo até o fim da tabela de checagens.
+// da demo, do resumo para o embarcador até o fim da tabela de checagens.
 //
 //   node scripts/captura_verificacao.mjs [saida.png]
 //
@@ -100,10 +100,15 @@ async function principal() {
   await cdp("Page.navigate", { url: `${BASE}/verificar/${escolhido}` });
   await esperar(1500);
   const { result } = await cdp("Runtime.evaluate", { returnByValue: true, expression: `(() => {
-    const tabela = document.querySelector("table");
+    // do topo (resumo para o embarcador) até o fim da prova (tabela de checagens)
+    const tabela = document.querySelector("#checagens");
     const fim = Math.ceil(tabela.getBoundingClientRect().bottom + window.scrollY + 8);
-    const titulo = document.querySelector("main").innerText.split("Checagens")[0];
-    return { altura: fim, texto: titulo + tabela.innerText,
+    const visiveis = [];
+    for (const el of document.querySelector("main").children) {
+      visiveis.push(el.innerText);
+      if (el === tabela) break;
+    }
+    return { altura: fim, texto: visiveis.join("\\n"),
              checagens: tabela.querySelectorAll("td.st").length,
              ok: [...tabela.querySelectorAll("td.st")].filter((e) => e.textContent === "OK").length };
   })()` });

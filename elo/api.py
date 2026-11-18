@@ -467,8 +467,9 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
         """Página pública, em português, com as 15 checagens e o resultado."""
         with trava:
             relatorio = plat().verificar_compromisso(compromisso_id)
+            topo = _resumo_topo(plat(), compromisso_id)
             resumo = _resumo(plat(), compromisso_id)
-        return HTMLResponse(_pagina(relatorio, resumo),
+        return HTMLResponse(_pagina(relatorio, topo, resumo),
                             status_code=200 if _existe(relatorio) else 404)
 
     return app
@@ -516,6 +517,38 @@ def _data_br(data_iso: str) -> str:
     return f"{dia}/{mes}/{ano}"
 
 
+def _milhares(n: int) -> str:
+    return f"{n:,}".replace(",", ".")
+
+
+def _m3(litros: int) -> str:
+    """14500 -> '14,5 m³' (inteiros, sem float)."""
+    inteiro, fracao = divmod(litros, 1000)
+    decimais = f"{fracao:03d}".rstrip("0")
+    return _milhares(inteiro) + (f",{decimais}" if decimais else "") + " m³"
+
+
+def _resumo_topo(plataforma: Plataforma, compromisso_id: str) -> dict[str, str] | None:
+    """O que o embarcador quer ver primeiro: valor, rota, transportadora e quando
+    o frete foi fechado. None se o compromisso ou a oferta não forem encontrados."""
+    cp = plataforma.compromissos.get(compromisso_id)
+    if cp is None:
+        return None
+    oferta = plataforma.ofertas.get(plataforma.ofertas_por_hash.get(cp["oferta_hash"], ""))
+    if oferta is None:
+        return None
+    cnpj = oferta["emissor"]["cnpj"]
+    org = plataforma.organizacoes.get(cnpj)
+    carga = oferta["carga"]
+    return {
+        "valor": reais(oferta["condicoes"]["valor_centavos"]),
+        "rota": f"{carga['origem_uf']} ({carga['origem_cep']}) → "
+                f"{carga['destino_uf']} ({carga['destino_cep']})",
+        "transportadora": f"{org['razao_social']} ({cnpj})" if org else cnpj,
+        "fechado_em": _em_brasilia(cp["aceite"]["em"]),
+    }
+
+
 def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]]:
     """Dados do acordo para a página. Só leitura do estado; sem regra de negócio.
 
@@ -538,8 +571,8 @@ def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]
             ("Valor", reais(cond["valor_centavos"])),
             ("Rota", f"{carga['origem_uf']} ({carga['origem_cep']}) → "
                      f"{carga['destino_uf']} ({carga['destino_cep']})"),
-            ("Carga", f"{carga['tipo']}, {carga['peso_kg']} kg, "
-                      f"{carga['volume_litros']} L"),
+            ("Carga", f"{carga['tipo']}, {_milhares(carga['peso_kg'])} kg, "
+                      f"{_m3(carga['volume_litros'])}"),
             ("Coleta até", _data_br(cond["coleta_ate"])),
             ("Prazo de entrega", f"{cond['prazo_entrega_dias_uteis']} dias úteis"),
         ]
@@ -552,12 +585,18 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;
 background:#f6f7f9;color:#1d2330}
 main{max-width:760px;margin:0 auto;padding:32px 20px 48px}
 h1{font-size:1.4rem;margin:0 0 4px}
-.id{font-family:ui-monospace,Consolas,monospace;color:#5b6475;margin:0 0 24px;
+h2{font-size:1.1rem;margin:28px 0 10px}
+.id{font-family:ui-monospace,Consolas,monospace;color:#5b6475;margin:0 0 20px;
 word-break:break-all}
-.resultado{border-radius:10px;padding:16px 20px;font-size:1.25rem;font-weight:700;
-margin-bottom:24px}
+.topo{border-radius:12px;padding:20px 22px;margin-bottom:8px}
 .valido{background:#e3f4e8;color:#14532d;border:1px solid #9fd5b0}
 .invalido{background:#fbe4e4;color:#7f1d1d;border:1px solid #eba9a9}
+.selo{font-weight:700;font-size:1rem;letter-spacing:.02em}
+.valor{font-size:2rem;font-weight:800;color:#1d2330;margin:10px 0 2px}
+.rota{font-size:1.1rem;color:#1d2330;margin-bottom:12px}
+.fatos{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0 0 12px;
+color:#1d2330}
+.fatos dt{color:#5b6475}.fatos dd{margin:0}
 table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:24px}
 th,td{text-align:left;padding:10px 14px;border-bottom:1px solid #eceef2;
@@ -573,7 +612,8 @@ footer{color:#5b6475;font-size:.85rem;line-height:1.5}
 """
 
 
-def _pagina(relatorio: Relatorio, resumo: list[tuple[str, str]]) -> str:
+def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
+            resumo: list[tuple[str, str]]) -> str:
     e = html.escape
     valido = relatorio.valido
     linhas = "".join(
@@ -587,12 +627,28 @@ def _pagina(relatorio: Relatorio, resumo: list[tuple[str, str]]) -> str:
     tabela_resumo = ""
     if resumo:
         tabela_resumo = (
-            '<h2>O que foi combinado</h2><table>'
+            '<h2>Detalhes do que foi combinado</h2><table>'
             + "".join(f'<tr><th>{e(k)}</th><td class="{"mono" if k.startswith("Hash") else ""}">'
                       f'{e(v)}</td></tr>' for k, v in resumo)
             + "</table>")
     ok_total = sum(v.ok for v in relatorio.verificacoes)
+    total = len(relatorio.verificacoes)
     cid = e(relatorio.compromisso_id)
+    selo = "✔ COMPROMISSO VÁLIDO" if valido else "✘ COMPROMISSO INVÁLIDO"
+    if valido:
+        prova = f"{ok_total} de {total} checagens OK. A prova está logo abaixo."
+    elif topo is None:
+        prova = "Compromisso não encontrado no registro."
+    else:
+        prova = (f"{ok_total} de {total} checagens OK. Não confie nestes dados até "
+                 "entender a falha mostrada abaixo.")
+    dados_topo = "" if topo is None else (
+        f'<div class="valor">{e(topo["valor"])}</div>'
+        f'<div class="rota">{e(topo["rota"])}</div>'
+        '<dl class="fatos">'
+        f'<dt>Transportadora</dt><dd>{e(topo["transportadora"])}</dd>'
+        f'<dt>Fechado em</dt><dd>{e(topo["fechado_em"])}</dd>'
+        "</dl>")
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -607,12 +663,13 @@ def _pagina(relatorio: Relatorio, resumo: list[tuple[str, str]]) -> str:
 <main>
 <h1>Verificação do compromisso</h1>
 <p class="id">{cid}</p>
-<div class="resultado {"valido" if valido else "invalido"}">
-{"✔ COMPROMISSO VÁLIDO" if valido else "✘ COMPROMISSO INVÁLIDO"}
-<div class="det">{ok_total} de {len(relatorio.verificacoes)} checagens OK</div>
-</div>
-<h2>Checagens</h2>
-<table>
+<section class="topo {"valido" if valido else "invalido"}">
+<div class="selo">{selo}</div>
+{dados_topo}
+<div class="det">{e(prova)}</div>
+</section>
+<h2>A prova: {total} checagens independentes</h2>
+<table id="checagens">
 <tr><th class="n">#</th><th>Checagem</th><th class="st">Resultado</th></tr>
 {linhas}
 </table>

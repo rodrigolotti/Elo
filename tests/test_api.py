@@ -492,3 +492,32 @@ def test_script_de_demo_roda_contra_a_api(tmp_path, monkeypatch, capsys):
             assert c.get(f"/compromissos/{cid}/verificacao").json()["valido"]
             assert status_na_pagina(c.get(f"/verificar/{cid}").text) == ["OK"] * len(CHECAGENS)
     assert "aguardando_aprovacao" in capsys.readouterr().out
+
+
+def test_pagina_mostra_resumo_para_o_embarcador_antes_da_prova(api):
+    _, emitida = emitir(api)
+    cp_id = aceitar(api, emitida["oferta"]["id"]).json()["id"]
+    texto = api["cliente"].get(f"/verificar/{cp_id}").text
+    topo = texto[texto.index('<section class="topo valido">'):texto.index("</section>")]
+    assert '<div class="valor">R$ 4.850,00</div>' in topo
+    assert "SP (00000-000) → PR (11111-111)" in topo
+    assert f"Transportadora Fictícia Ltda ({CNPJ_TRANSP})" in topo
+    assert re.search(r"<dt>Fechado em</dt><dd>\d{2}/\d{2}/\d{4} às \d{2}:\d{2} "
+                     r"\(horário de Brasília\)</dd>", topo)
+    assert "A prova está logo abaixo" in topo
+    # a ordem: resumo, depois a prova (15 checagens), depois os detalhes
+    assert (texto.index('class="topo') < texto.index('id="checagens"')
+            < texto.index("Detalhes do que foi combinado"))
+    assert re.search(r"<th>Carga</th><td[^>]*>carga geral, 3\.200 kg, 14,5 m³</td>", texto)
+    assert "maria@exemplo.com" not in texto and "Maria Exemplo" not in texto
+
+
+def test_pagina_invalida_avisa_no_resumo_para_nao_confiar(api, plataforma):
+    _, emitida = emitir(api)
+    cp_id = aceitar(api, emitida["oferta"]["id"]).json()["id"]
+    conexao = plataforma.registro.conexao
+    conexao.execute("DROP TRIGGER IF EXISTS eventos_sem_update")
+    conexao.execute("UPDATE eventos SET hash = 'x' WHERE seq = 1")
+    texto = api["cliente"].get(f"/verificar/{cp_id}").text
+    topo = texto[texto.index('<section class="topo invalido">'):texto.index("</section>")]
+    assert "COMPROMISSO INVÁLIDO" in topo and "Não confie nestes dados" in topo

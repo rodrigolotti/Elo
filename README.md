@@ -26,7 +26,7 @@ flowchart LR
 
 ![Página pública de verificação mostrando o compromisso válido, com 15 de 15 checagens OK](docs/verificacao.png)
 
-*Página pública de verificação: 15 checagens independentes (dados fictícios)*
+*Página pública de verificação: no topo, o resumo para o embarcador (valor, rota, transportadora e data do fechamento); abaixo, as 15 checagens independentes que provam o acordo (dados fictícios)*
 
 ### Rodar em 6 comandos (cmd do Windows)
 
@@ -117,7 +117,10 @@ Abra no navegador:
 ```
 
 Abra esse link no navegador (ou rode `start http://127.0.0.1:8000/verificar/<id>`
-no `cmd`). A página mostra as 15 checagens com OK ou FALHA e o resultado final.
+no `cmd`). No topo, a página resume o frete para o embarcador (valor, rota,
+transportadora e data do fechamento no horário de Brasília). Abaixo, as 15 checagens
+com OK ou FALHA servem de prova. Se alguma falhar, o resumo fica vermelho e avisa para
+não confiar nos dados.
 A documentação interativa da API fica em http://127.0.0.1:8000/docs.
 O painel da transportadora fica em http://127.0.0.1:8000/painel/ (veja abaixo).
 Para parar a API, use `Ctrl+C` na janela em que ela está rodando.
@@ -366,7 +369,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - Registro SQLite só de inclusão: os gatilhos recusam UPDATE e DELETE, e a corrente de hashes denuncia adulteração direta no arquivo.
 - Relatório de verificação com 15 checagens independentes, refeitas a partir do registro.
 - API HTTP (FastAPI) em que as empresas assinam do lado delas: a API nunca recebe chave privada.
-- Página pública `/verificar/{id}`, em português, com as 15 checagens (OK ou FALHA) e o resultado final.
+- Página pública `/verificar/{id}`, em português: resumo do frete para o embarcador no topo e, abaixo, as 15 checagens (OK ou FALHA) como prova.
 - Registro persistido no arquivo de `ELO_DB` (padrão `elo.db`): compromissos continuam verificáveis depois de reiniciar a API.
 - Login no painel por desafio assinado com a chave da organização. As consultas exigem sessão e mostram só os dados da própria organização.
 - Painel web da transportadora em `/painel`: cadastro, agentes, mandatos com revogação, fila de aprovação e histórico, com a chave da organização só no navegador.
