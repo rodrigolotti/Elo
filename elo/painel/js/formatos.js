@@ -71,6 +71,13 @@ export function emBrasilia(iso) {
   return `${partes.day}/${partes.month}/${partes.year} às ${partes.hour}:${partes.minute}`;
 }
 
+/** Troca, num texto, cada data e hora ISO 8601 com fuso pela forma de Brasília. */
+export function datasEmBrasilia(texto) {
+  return String(texto).replace(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})/g,
+    (iso) => `${emBrasilia(iso)} (horário de Brasília)`);
+}
+
 /** "2026-11-20" -> "20/11/2026" (data sem hora: não há fuso a converter). */
 export function dataBr(dataIso) {
   const [ano, mes, dia] = dataIso.split("-");

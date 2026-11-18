@@ -34,9 +34,19 @@ def plataforma(relogio):
     return Plataforma(Registro(), ParDeChaves.gerar("plataforma#teste"), relogio)
 
 
+class EstimadorFalso:
+    """Sem rede: SP (01xxx) → PR (80xxx) dá 427 km; o resto, sem estimativa."""
+
+    def estimar(self, cep_origem, cep_destino):
+        if cep_origem.startswith("0") and cep_destino.startswith("8"):
+            return {"km": 427, "origem": "São Paulo/SP", "destino": "Curitiba/PR",
+                    "metodo": "estimada"}
+        return {"km": None, "motivo": f"CEP {cep_origem} não encontrado no ViaCEP"}
+
+
 @pytest.fixture
 def cliente(plataforma):
-    return TestClient(criar_app(plataforma))
+    return TestClient(criar_app(plataforma, estimador=EstimadorFalso()))
 
 
 def assinar_e_enviar(cliente, rota_rascunho, corpo, chave, rota):

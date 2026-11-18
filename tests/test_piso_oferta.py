@@ -118,3 +118,51 @@ def test_api_preve_aprovacao_para_oferta_abaixo_do_piso(api):
     assert r["status_previsto"] == "aguardando_aprovacao"
     assert r["violacoes"][0].startswith(AVISO_PISO)
     assert r["rascunho"]["condicoes"]["modalidade"] == "lotacao"
+
+
+# ---------- o que o painel recebe: distância, valor por km e piso ----------
+
+def _pendente(api, sessao, valor, **condicoes_extra):
+    from test_api import CARGA
+    c = api["cliente"]
+    r = c.post("/pedidos", json={"cnpj_solicitante": CNPJ_EMBARC, "canal": "email",
+                                 "carga": {**CARGA, "origem_cep": "01001-000",
+                                           "destino_cep": "80010-000"}})
+    corpo = {**corpo_oferta(api, valor=valor), "pedido_id": r.json()["id"]}
+    corpo["condicoes"] = {**corpo["condicoes"], **condicoes_extra}
+    rascunho = c.post("/ofertas/rascunho", json=corpo).json()["rascunho"]
+    oferta = c.post("/ofertas", json=api["chave_agente"].assinar(rascunho)).json()["oferta"]
+    return next(o for o in c.get("/ofertas", headers=sessao).json()
+                if o["oferta"]["id"] == oferta["id"])["frete"]
+
+
+@pytest.fixture
+def sessao(api):
+    from test_api_painel import entrar
+    return entrar(api["cliente"], api["chave_org"])
+
+
+def test_frete_com_distancia_do_agente(api, sessao):
+    frete = _pendente(api, sessao, 900_000, **LOTACAO)
+    assert frete["distancia"] == {"km": 500, "origem": "agente"}
+    assert frete["valor_por_km_centavos"] == 1_800            # R$ 9.000 / 500 km = R$ 18,00
+    assert frete["piso"]["piso_centavos"] == 407_176 and frete["piso"]["estimado"] is False
+    assert frete["piso"]["folga_centavos"] == 900_000 - 407_176
+
+
+def test_frete_com_distancia_estimada_pelo_cep(api, sessao):
+    frete = _pendente(api, sessao, 900_000, modalidade="lotacao", eixos=5)
+    assert frete["distancia"]["origem"] == "estimada" and frete["distancia"]["km"] == 427
+    assert frete["distancia"]["detalhe"] == "São Paulo/SP → Curitiba/PR"
+    assert frete["piso"]["estimado"] is True
+    assert frete["piso"]["piso_centavos"] == (427 * 68284 + 50) // 100 + 65756
+
+
+@pytest.mark.parametrize("extra, motivo", [
+    ({"modalidade": "fracionada", "distancia_km": 500, "eixos": 5}, "carga fracionada"),
+    ({"distancia_km": 500, "eixos": 5}, "não informou se é lotação ou fracionada"),
+    ({"modalidade": "lotacao", "distancia_km": 500}, "não informou o número de eixos"),
+])
+def test_frete_explica_quando_nao_ha_piso(api, sessao, extra, motivo):
+    frete = _pendente(api, sessao, 900_000, **extra)
+    assert frete["piso"] is None and motivo in frete["sem_piso"]

@@ -1,4 +1,4 @@
-"""Gera elo/dados/sedes_municipais_ibge_2022.csv a partir da Base de Localidades do IBGE.
+r"""Gera elo/dados/sedes_municipais_ibge_2022.csv a partir da Base de Localidades do IBGE.
 
     python scripts\extrair_sedes_ibge.py Localidades_Brasil_shp.zip elo\dados\sedes_municipais_ibge_2022.csv
 

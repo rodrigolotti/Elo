@@ -253,11 +253,14 @@ function emBrasiliaDaqui(ms) {
   return d.toISOString().slice(0, 19) + "-03:00";
 }
 
-async function emitirOferta(agente, pedidoId, agenteId, mandatoId, valor) {
+// lotação, 500 km, 5 eixos, carga geral: piso da ANTT de R$ 4.071,76
+const LOTACAO_500KM = { modalidade: "lotacao", distancia_km: 500, eixos: 5 };
+
+async function emitirOferta(agente, pedidoId, agenteId, mandatoId, valor, extra = {}) {
   const { rascunho } = await http("POST", "/ofertas/rascunho", {
     pedido_id: pedidoId, agente_id: agenteId, mandato_id: mandatoId,
     condicoes: { valor_centavos: valor, coleta_ate: emBrasiliaDaqui(2 * 864e5).slice(0, 10),
-                 prazo_entrega_dias_uteis: 2, inclui: ["pedágio", "seguro"] },
+                 prazo_entrega_dias_uteis: 2, inclui: ["pedágio", "seguro"], ...extra },
     valida_ate: emBrasiliaDaqui(864e5),
   });
   return http("POST", "/ofertas", await assinar(rascunho, agente.privateKey, "agente-cotacao#k1"));
@@ -333,7 +336,8 @@ const comToken = (token, rota) =>
 async function roteiro() {
   console.log(`API em ${BASE}; capturas em ${CAPTURAS}`);
   subir(process.env.PYTHON ?? "python", ["-m", "uvicorn", "elo.api:app", "--port",
-    String(PORTA_API)], { env: { ...process.env, ELO_DB: join(temporario, "elo.db") } });
+    String(PORTA_API)], { env: { ...process.env, ELO_DB: join(temporario, "elo.db"),
+                                 ELO_ESTIMATIVA_CEP: "desligada" } });  // sem rede
   await aguardarUrl(`${BASE}/openapi.json`);
   if (!CHROME) falhar("Chrome/Edge não encontrado: defina CHROME");
   subir(CHROME, ["--headless=new", `--remote-debugging-port=${PORTA_CDP}`,
@@ -511,8 +515,9 @@ async function roteiro() {
     nome_solicitante: "Comercial Exemplo de Alimentos Ltda (fictícia)",
     carga: { origem_cep: "01000-000", origem_uf: "SP", destino_cep: "80000-000",
              destino_uf: "PR", peso_kg: 3200, volume_litros: 14500, tipo: "carga-geral" } });
-  const aprovar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 900_000);
-  const recusar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 750_000);
+  const aprovar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 900_000, LOTACAO_500KM);
+  const recusar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 750_000,
+                                     { modalidade: "lotacao", eixos: 5 });  // sem distância
   const dentro = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 485_000);
   if (aprovar.status !== "aguardando_aprovacao" || dentro.status !== "enviada") {
     falhar("status das ofertas inesperado");
@@ -534,6 +539,13 @@ async function roteiro() {
     falhar("o volume ainda aparece em litros");
   }
   ok("cartão: nome do embarcador, primeiro frete, volume em m³, peso cubado e 'vence em 23 h'");
+  for (const trecho of ["Esse frete paga o piso?", "Lotação · 5 eixos", "500 km (informada pelo agente)",
+    "R$ 18,00/km", "R$ 4.071,76 · Carga geral, 5 eixos · tabela vigente desde 30/09/2026",
+    "Acima do piso em R$ 4.928,24.",
+    "Não disponível (estimativa por CEP desligada neste servidor)"]) {
+    await p.aguardarTexto(trecho);
+  }
+  ok("piso da ANTT: distância do agente, R$/km, piso, folga; sem distância, explica o motivo");
 
   const cartao = (id) => `[...document.querySelectorAll("article.cartao")].find((c) => c.innerText.includes(${JSON.stringify(id)}))`;
   await p.clicar("Aprovar", cartao(aprovar.oferta.id));
@@ -591,7 +603,10 @@ async function roteiro() {
   await p.clicar("Confirmar revogação", "document.querySelector('dialog')");
   await p.aguardar("document.querySelector('.etiqueta.ruim')?.textContent === 'Revogado'");
   await p.capturar("mandato-revogado");
-  const depois = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 100_000);
+  const depois = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 100_000, LOTACAO_500KM);
+  if (!depois.violacoes.some((v) => v.startsWith("abaixo do piso mínimo da ANTT: risco de multa e indenização"))) {
+    falhar(`a oferta de R$ 1.000 em 500 km deveria estar abaixo do piso: ${depois.violacoes}`);
+  }
   if (depois.status !== "aguardando_aprovacao") falhar("oferta após revogação deveria ir para aprovação");
   ok("mandato revogado; nova oferta do agente cai na fila");
 
@@ -608,6 +623,10 @@ async function roteiro() {
   ok("saiu (token encerrado) e entrou de novo assinando o desafio");
   await p.aguardarTexto("2 fretes já fechados com ele");
   ok("depois de 2 aceites, a oferta nova mostra '2 fretes já fechados com ele'");
+  await p.aguardarTexto("abaixo do piso mínimo da ANTT: risco de multa e indenização (piso de R$ 4.071,76");
+  await p.aguardarTexto("R$ 3.071,76 abaixo do piso mínimo da ANTT: risco de multa e indenização.");
+  await p.capturar("abaixo-do-piso");
+  ok("oferta de R$ 1.000 em 500 km: violação e caixa vermelha 'abaixo do piso mínimo da ANTT'");
   await p.menu("/seguranca");
   await p.aguardarTexto("Histórico de acesso");
   await p.aguardarTexto("Criado em");

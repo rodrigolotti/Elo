@@ -235,3 +235,9 @@ def test_lista_de_tipos_de_carga_do_painel_e_igual_a_do_servidor(navegador):
     from elo.antt import TIPOS_CARGA
     js = chamar(navegador, "formatos.js", "tiposCarga")
     assert [tuple(par) for par in js] == list(TIPOS_CARGA.items())
+
+
+def test_datas_iso_dentro_de_um_texto_viram_horario_de_brasilia(navegador):
+    texto = "mandato revogado em 2026-11-18T22:54:43+00:00; ok"
+    assert chamar(navegador, "formatos.js", "datasEmBrasilia", texto) \
+        == "mandato revogado em 18/11/2026 às 19:54 (horário de Brasília); ok"

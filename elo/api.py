@@ -45,7 +45,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from .antt import nome_tipo_carga
 from .canonico import hash_sha256
 from .chaves import ParDeChaves
-from .mandato import reais
+from .distancia import EstimadorDistancia
+from .mandato import piso_da_oferta, reais
 from .modelos import Carga, Condicoes, LimitesMandato, ler_momento
 from .registro import Registro
 from .servico import ErroElo, NaoEncontrado, Plataforma, Relatorio
@@ -197,7 +198,62 @@ def _plataforma_padrao() -> Plataforma:
     return Plataforma(Registro(os.environ.get("ELO_DB", "elo.db")), chave)
 
 
-def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
+class _EstimativaDesligada:
+    """Para testes e roteiros sem rede: ELO_ESTIMATIVA_CEP=desligada."""
+
+    def estimar(self, cep_origem: str, cep_destino: str) -> dict[str, Any]:
+        return {"km": None, "motivo": "estimativa por CEP desligada neste servidor"}
+
+
+def _estimador_padrao() -> Any:
+    if os.environ.get("ELO_ESTIMATIVA_CEP", "").lower() == "desligada":
+        return _EstimativaDesligada()
+    return EstimadorDistancia()
+
+
+def _frete(item: dict[str, Any], estimador: Any) -> dict[str, Any]:
+    """Se o frete paga o piso: modalidade, distância (do agente ou estimada),
+    valor por km e piso da ANTT. Só para exibir; a regra do mandato usa só o que
+    o agente assinou (elo.mandato.violacoes)."""
+    oferta = item["oferta"]
+    condicoes = Condicoes(**oferta["condicoes"])
+    carga = Carga(**oferta["carga"])
+    valor = condicoes.valor_centavos
+    if condicoes.distancia_km:
+        distancia = {"km": condicoes.distancia_km, "origem": "agente"}
+    else:
+        estimada = estimador.estimar(carga.origem_cep, carga.destino_cep)
+        distancia = {"km": estimada.get("km"), "origem": "estimada",
+                     "detalhe": (f"{estimada['origem']} → {estimada['destino']}"
+                                 if estimada.get("km") else estimada.get("motivo"))}
+    km = distancia["km"]
+    frete: dict[str, Any] = {
+        "modalidade": condicoes.modalidade, "eixos": condicoes.eixos, "distancia": distancia,
+        # arredondado meio para cima, em centavos por km
+        "valor_por_km_centavos": (2 * valor + km) // (2 * km) if km else None,
+        "piso": None, "sem_piso": None,
+    }
+    if condicoes.modalidade == "fracionada":
+        frete["sem_piso"] = "carga fracionada: o piso da ANTT (Tabela A) não se aplica"
+    elif condicoes.modalidade is None:
+        frete["sem_piso"] = "o agente não informou se é lotação ou fracionada"
+    elif condicoes.eixos is None:
+        frete["sem_piso"] = "o agente não informou o número de eixos"
+    elif not km:
+        frete["sem_piso"] = f"sem distância: {distancia.get('detalhe')}"
+    else:
+        piso = piso_da_oferta(carga, condicoes.model_copy(update={"distancia_km": km}),
+                              ler_momento(oferta["emitida_em"]))
+        if piso is None:
+            frete["sem_piso"] = ("a Tabela A da ANTT não publica piso para esta combinação "
+                                 "de categoria, eixos e data")
+        else:
+            frete["piso"] = {**piso, "estimado": distancia["origem"] == "estimada",
+                             "folga_centavos": valor - piso["piso_centavos"]}
+    return frete
+
+
+def criar_app(plataforma: Plataforma | None = None, estimador: Any = None) -> FastAPI:
     """Cria a API. Sem plataforma, abre o banco de ELO_DB ao iniciar."""
 
     @asynccontextmanager
@@ -218,6 +274,7 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
         lifespan=ciclo_de_vida,
     )
     app.state.plataforma = plataforma
+    app.state.estimador = estimador if estimador is not None else _estimador_padrao()
     sessoes = app.state.sessoes = Sessoes(lambda: app.state.plataforma)
     # a Plataforma mantém estado em memória e uma conexão SQLite: uma
     # requisição por vez
@@ -293,8 +350,11 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
 
     @app.get("/ofertas", tags=["consulta"])
     def listar_ofertas(cnpj: Logado, status: StatusOferta | None = None) -> list[dict[str, Any]]:
+        """Ofertas da organização, cada uma com "frete": distância, valor por km e
+        piso da ANTT (a estimativa por CEP roda fora da trava)."""
         with trava:
-            return plat().listar_ofertas(cnpj, status)
+            itens = plat().listar_ofertas(cnpj, status)
+        return [{**item, "frete": _frete(item, app.state.estimador)} for item in itens]
 
     @app.get("/compromissos", tags=["consulta"])
     def listar_compromissos(cnpj: Logado) -> list[dict[str, Any]]:

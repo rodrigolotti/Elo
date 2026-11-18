@@ -15,7 +15,8 @@ import {
   avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
 } from "./ui.js";
 import {
-  FATOR_CUBAGEM_KG_POR_M3, TIPOS_CARGA, UFS, centavosDeReais, chavePublicaValida, dataBr, emBrasilia,
+  FATOR_CUBAGEM_KG_POR_M3, TIPOS_CARGA, UFS, centavosDeReais, chavePublicaValida, dataBr,
+  datasEmBrasilia, emBrasilia,
   isoDeBrasilia, localDeBrasilia, metrosCubicos, numero, pesoCubadoKg, prazoAte, reais,
   resumoFrete, rota, soDigitos,
 } from "./formatos.js";
@@ -355,6 +356,41 @@ function blocoCarga(carga, tipoCarga) {
       + (cubado > carga.peso_kg ? ", maior que o peso real" : "")));
 }
 
+/** "Esse frete paga o piso?": distância, valor por km e piso mínimo da ANTT. */
+function blocoPiso(frete, valorCentavos) {
+  const d = frete.distancia;
+  const modalidade = frete.modalidade === "lotacao" ? "Lotação"
+    : frete.modalidade === "fracionada" ? "Fracionada" : "Não informada pelo agente";
+  const distancia = !d.km ? `Não disponível (${d.detalhe})`
+    : d.origem === "agente" ? `${numero(d.km)} km (informada pelo agente)`
+    : `≈ ${numero(d.km)} km (estimada: ${d.detalhe})`;
+  const p = frete.piso;
+  const data = p ? p.vigencia_desde.split("-").reverse().join("/") : "";
+  let conclusao = null;
+  let classe = "neutro";
+  if (p && p.folga_centavos >= 0) {
+    classe = "bom";
+    conclusao = `Acima do piso em ${reais(p.folga_centavos)}.`;
+  } else if (p) {
+    classe = "ruim";
+    conclusao = p.estimado
+      ? `Pela distância estimada, ficaria ${reais(-p.folga_centavos)} abaixo do piso mínimo da `
+        + "ANTT. Confirme a distância com o agente."
+      : `${reais(-p.folga_centavos)} abaixo do piso mínimo da ANTT: risco de multa e indenização.`;
+  }
+  return h("div", { class: `caixa piso ${classe}` },
+    h("h3", {}, "Esse frete paga o piso?"),
+    dados([
+      ["Modalidade", `${modalidade}${frete.eixos ? ` · ${frete.eixos} eixos` : ""}`],
+      ["Distância", distancia],
+      frete.valor_por_km_centavos ? ["Valor por km", `${reais(frete.valor_por_km_centavos)}/km`
+        + (d.origem === "estimada" ? " (pela distância estimada)" : "")] : null,
+      ["Piso ANTT", p ? `${reais(p.piso_centavos)}${p.estimado ? " (estimado)" : ""} · ${p.nome}, `
+        + `${p.eixos} eixos · tabela vigente desde ${data}` : frete.sem_piso],
+    ]),
+    conclusao ? h("p", { class: "conclusao" }, h("strong", {}, conclusao)) : null);
+}
+
 function cartaoOferta(item, agentes) {
   const { oferta, violacoes, embarcador } = item;
   const c = oferta.condicoes;
@@ -426,7 +462,8 @@ function cartaoOferta(item, agentes) {
         prazoAte(oferta.valida_ate))),
     h("div", { class: "caixa motivo" },
       h("h3", {}, "Por que precisa de aprovação"),
-      h("ul", {}, violacoes.map((v) => h("li", {}, v)))),
+      h("ul", {}, violacoes.map((v) => h("li", {}, datasEmBrasilia(v))))),
+    blocoPiso(item.frete, c.valor_centavos),
     dados([
       ["Embarcador", blocoEmbarcador(embarcador)],
       ["Rota", rota(oferta.carga)],
