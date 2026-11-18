@@ -102,7 +102,8 @@ def executar(cliente: httpx.Client) -> list[str]:
             "valida_ate": (agora + timedelta(days=1)).isoformat(timespec="seconds"),
         }, chave_agente, "/ofertas")
         oferta_id = emitida["oferta"]["id"]
-        print(f"   oferta {oferta_id}: {emitida['status']}")
+        token = emitida["token_aceite"]  # a transportadora manda ao embarcador com o link
+        print(f"   oferta {oferta_id}: {emitida['status']} (token de aceite recebido)")
 
         if emitida["status"] == "aguardando_aprovacao":
             print(f"   fora do mandato: {'; '.join(preparado['violacoes'])}")
@@ -112,7 +113,7 @@ def executar(cliente: httpx.Client) -> list[str]:
             print("   gerente aprovou com a chave da organização (assinada localmente)")
 
         cp = _ok(cliente.post(f"/ofertas/{oferta_id}/aceite", json={
-            "cnpj": cnpj_embarc, "nome": "Maria Exemplo", "email": "maria@exemplo.com"}))
+            "token": token, "cnpj": cnpj_embarc, "nome": "Maria Exemplo", "email": "maria@exemplo.com"}))
         relatorio = _ok(cliente.get(f"/compromissos/{cp['id']}/verificacao"))
         ok = sum(v["ok"] for v in relatorio["verificacoes"])
         print(f"   compromisso {cp['id']}: {ok}/{len(relatorio['verificacoes'])} "

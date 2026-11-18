@@ -81,14 +81,14 @@ def main() -> None:
     titulo("4. O agente oferece dentro do mandato e o embarcador aceita")
     cond = Condicoes(valor_centavos=485_000, coleta_ate="2026-11-20",
                      prazo_entrega_dias_uteis=2, inclui=["pedagio", "seguro_rctr_c"])
-    oferta, problemas = plataforma.emitir_oferta(
+    oferta, problemas, token = plataforma.emitir_oferta(
         pedido["id"], agente["agente_id"], mandato["id"], chave_agente, cond,
         "2026-11-18T18:00:00-03:00")
     print(f"  Oferta {oferta['id']} de {reais(cond.valor_centavos)}: "
           f"{'enviada direto' if not problemas else 'aguardando aprovação'}")
     relogio.avancar(hours=1, minutes=42)
     cp = plataforma.aceitar_oferta(oferta["id"], cnpj_embarc, "Maria Exemplo",
-                                   "maria@exemplo.com")
+                                   "maria@exemplo.com", token)
     print(f"  Compromisso {cp['id']} firmado às {cp['aceite']['em']}")
 
     titulo("5. Qualquer parte verifica o compromisso")
@@ -101,7 +101,7 @@ def main() -> None:
               destino_uf="PR", peso_kg=12000, volume_litros=60000, tipo="carga geral"))
     cond2 = Condicoes(valor_centavos=920_000, coleta_ate="2026-11-21",
                       prazo_entrega_dias_uteis=3)
-    oferta2, problemas2 = plataforma.emitir_oferta(
+    oferta2, problemas2, token2 = plataforma.emitir_oferta(
         pedido2["id"], agente["agente_id"], mandato["id"], chave_agente, cond2,
         "2026-11-19T18:00:00-03:00")
     print(f"  Oferta bloqueada pelo mandato: {problemas2[0]}")
@@ -109,7 +109,7 @@ def main() -> None:
     print("  Gerente aprovou com a chave da organização")
     relogio.avancar(minutes=30)
     cp2 = plataforma.aceitar_oferta(oferta2["id"], cnpj_embarc, "Maria Exemplo",
-                                    "maria@exemplo.com")
+                                    "maria@exemplo.com", token2)
     mostrar_relatorio(plataforma.verificar_compromisso(cp2["id"]))
 
     titulo("7. Compromisso em JSON (o que a página de verificação mostraria)")

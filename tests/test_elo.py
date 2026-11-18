@@ -51,27 +51,27 @@ def test_assinatura_detecta_qualquer_alteracao():
 
 def test_fluxo_dentro_do_mandato_gera_compromisso_valido(cenario):
     p = cenario["plataforma"]
-    oferta, problemas = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, problemas, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                         cenario["mandato_id"], cenario["chave_agente"],
                                         condicoes(), VALIDADE)
     assert problemas == []
     assert p.status_oferta[oferta["id"]] == "enviada"
     cenario["relogio"].avancar(hours=2)
-    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria Exemplo", "maria@exemplo.com")
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria Exemplo", "maria@exemplo.com", token)
     relatorio = p.verificar_compromisso(cp["id"])
     assert relatorio.valido, [v for v in relatorio.verificacoes if not v.ok]
 
 
 def test_oferta_acima_do_limite_exige_aprovacao_humana(cenario):
     p = cenario["plataforma"]
-    oferta, problemas = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, problemas, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                         cenario["mandato_id"], cenario["chave_agente"],
                                         condicoes(valor_centavos=900_000), VALIDADE)
     assert any("acima do limite" in x for x in problemas)
     with pytest.raises(ErroElo):
-        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
     p.aprovar_oferta(oferta["id"], cenario["chave_org"], "Gerente Comercial")
-    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
     relatorio = p.verificar_compromisso(cp["id"])
     assert relatorio.valido
     autorizacao = next(v for v in relatorio.verificacoes if v.nome == "Oferta autorizada")
@@ -80,7 +80,7 @@ def test_oferta_acima_do_limite_exige_aprovacao_humana(cenario):
 
 def test_aprovacao_exige_chave_da_organizacao(cenario):
     p = cenario["plataforma"]
-    oferta, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                 cenario["mandato_id"], cenario["chave_agente"],
                                 condicoes(valor_centavos=900_000), VALIDADE)
     with pytest.raises(ErroElo):
@@ -91,7 +91,7 @@ def test_mandato_revogado_bloqueia_novas_ofertas(cenario):
     p = cenario["plataforma"]
     p.revogar_mandato(cenario["mandato_id"], cenario["chave_org"])
     cenario["relogio"].avancar(minutes=1)
-    _, problemas = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    _, problemas, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                    cenario["mandato_id"], cenario["chave_agente"],
                                    condicoes(), VALIDADE)
     assert any("revogado" in x for x in problemas)
@@ -99,32 +99,32 @@ def test_mandato_revogado_bloqueia_novas_ofertas(cenario):
 
 def test_oferta_vencida_nao_pode_ser_aceita(cenario):
     p = cenario["plataforma"]
-    oferta, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                 cenario["mandato_id"], cenario["chave_agente"],
                                 condicoes(), VALIDADE)
     cenario["relogio"].avancar(days=3)
     with pytest.raises(ErroElo, match="vencida"):
-        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
 
 
 def test_so_o_destinatario_pode_aceitar(cenario):
     from conftest import cnpj_ficticio
     p = cenario["plataforma"]
-    oferta, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                 cenario["mandato_id"], cenario["chave_agente"],
                                 condicoes(), VALIDADE)
     with pytest.raises(ErroElo, match="destinatário"):
-        p.aceitar_oferta(oferta["id"], cnpj_ficticio("334445550001"), "Outro", "o@x.com")
+        p.aceitar_oferta(oferta["id"], cnpj_ficticio("334445550001"), "Outro", "o@x.com", token)
 
 
 def test_oferta_nao_pode_ser_aceita_duas_vezes(cenario):
     p = cenario["plataforma"]
-    oferta, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                 cenario["mandato_id"], cenario["chave_agente"],
                                 condicoes(), VALIDADE)
-    p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+    p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
     with pytest.raises(ErroElo):
-        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+        p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
 
 
 def test_agente_nao_assina_com_chave_alheia(cenario):
@@ -154,10 +154,10 @@ def test_registro_recusa_update_e_delete(cenario):
 
 def test_adulteracao_direta_no_banco_e_detectada(cenario):
     p = cenario["plataforma"]
-    oferta, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                 cenario["mandato_id"], cenario["chave_agente"],
                                 condicoes(), VALIDADE)
-    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
     assert p.verificar_compromisso(cp["id"]).valido
 
     # simula alguém com acesso ao arquivo: remove os gatilhos e altera o valor
@@ -181,10 +181,10 @@ def test_adulteracao_direta_no_banco_e_detectada(cenario):
 
 def test_estado_e_reconstruido_a_partir_do_registro(cenario, relogio, tmp_path):
     p = cenario["plataforma"]
-    oferta, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+    oferta, _, token = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
                                 cenario["mandato_id"], cenario["chave_agente"],
                                 condicoes(), VALIDADE)
-    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com")
+    cp = p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
     # nova instância lendo o mesmo banco, com a mesma chave de plataforma
     nova = Plataforma(p.registro, p.chave, relogio)
     assert nova.verificar_compromisso(cp["id"]).valido

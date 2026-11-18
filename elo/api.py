@@ -82,6 +82,8 @@ class PrepararAprovacao(_Corpo):
 
 
 class Aceite(_Corpo):
+    token: str = Field(min_length=1, max_length=200,
+                       description="Token de aceite devolvido uma única vez em POST /ofertas")
     cnpj: str = Field(description="CNPJ do embarcador destinatário da oferta")
     nome: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=200)
@@ -198,7 +200,11 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
 
     @app.post("/ofertas", status_code=201, tags=["oferta"])
     def emitir_oferta(assinado: dict[str, Any] = ObjetoAssinado) -> dict[str, Any]:
-        """Devolve {"oferta", "status", "violacoes"}."""
+        """Devolve {"oferta", "status", "violacoes", "token_aceite_hash", "token_aceite"}.
+
+        O token_aceite só aparece nesta resposta (o registro guarda só o hash):
+        a transportadora o envia ao embarcador junto com o link de aceite.
+        """
         with trava:
             return plat().registrar_assinado(assinado, "oferta")
 
@@ -218,9 +224,10 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
 
     @app.post("/ofertas/{oferta_id}/aceite", status_code=201, tags=["oferta"])
     def aceitar_oferta(oferta_id: str, corpo: Aceite) -> dict[str, Any]:
-        """Aceite humano pelo link: a plataforma atesta com a chave dela."""
+        """Aceite humano pelo link, com o token de uso único. A plataforma atesta."""
         with trava:
-            return plat().aceitar_oferta(oferta_id, corpo.cnpj, corpo.nome, corpo.email)
+            return plat().aceitar_oferta(oferta_id, corpo.cnpj, corpo.nome, corpo.email,
+                                         corpo.token)
 
     # ----- verificação -----
 

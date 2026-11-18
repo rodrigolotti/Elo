@@ -16,7 +16,7 @@ Requisitos: Python 3.11+, `pydantic` 2 e `cryptography`. Para a API, `fastapi`,
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 42 testes (19 do núcleo + 23 da API)
+python3 -m pytest -q     # 47 testes (19 do núcleo + 28 da API)
 ```
 
 ## API no Windows (cmd)
@@ -83,11 +83,28 @@ Toda operação que precisa da assinatura de uma empresa tem dois passos:
 | `POST /pedidos` | Registra o pedido de cotação | ninguém |
 | `POST /ofertas/rascunho` → `POST /ofertas` | Emite a oferta (diz se sai do mandato) | agente |
 | `POST /ofertas/{id}/aprovacao/rascunho` → `POST /ofertas/{id}/aprovacao` | Aprovação humana | organização |
-| `POST /ofertas/{id}/aceite` | Aceite do embarcador por link | plataforma (atesta) |
+| `POST /ofertas/{id}/aceite` | Aceite do embarcador por link (exige o token de aceite) | plataforma (atesta) |
 | `GET /compromissos/{id}/verificacao` | Relatório em JSON | — |
 | `GET /verificar/{id}` | Página pública de verificação (HTML) | — |
 
 Erros de regra respondem 400, objetos inexistentes 404 e corpo inválido 422.
+
+### Token de aceite
+
+Ao registrar a oferta (`POST /ofertas`), a resposta traz `token_aceite`, gerado
+com `secrets.token_urlsafe(32)`. **Ele aparece só nessa resposta**: o registro
+guarda apenas o hash SHA-256 (`token_aceite_hash`). A transportadora manda o token
+ao embarcador junto com o link, e o aceite precisa dele:
+
+```json
+POST /ofertas/{id}/aceite
+{"token": "<token_aceite>", "cnpj": "22.333.444/0001-xx", "nome": "Maria", "email": "maria@exemplo.com"}
+```
+
+Sem token o pedido é recusado (422). Token errado ou de outra oferta também
+(400, "token de aceite inválido"), e o token é conferido antes de tudo, então
+não revela nada sobre a oferta. Como cada oferta só pode ser aceita uma vez, o
+token é de uso único: reenviá-lo depois do aceite é recusado.
 
 ## O que já funciona
 
@@ -96,7 +113,7 @@ Erros de regra respondem 400, objetos inexistentes 404 e corpo inválido 422.
 - Mandato assinado: valor máximo, UFs de origem e destino, tipos de carga e validade. Pode ser revogado.
 - Oferta assinada pelo agente. Se ela sair do mandato, fica aguardando aprovação humana.
 - Aprovação humana assinada com a chave da organização.
-- Aceite do embarcador por link, atestado pela plataforma. Só o destinatário pode aceitar, só dentro da validade e uma vez só.
+- Aceite do embarcador por link, atestado pela plataforma. Exige o token de aceite de uso único gerado na emissão da oferta. Só o destinatário pode aceitar, só dentro da validade e uma vez só.
 - Registro SQLite só de inclusão: os gatilhos recusam UPDATE e DELETE, e a corrente de hashes denuncia adulteração direta no arquivo.
 - Relatório de verificação com 14 checagens independentes, refeitas a partir do registro.
 
@@ -128,12 +145,13 @@ Erros de regra respondem 400, objetos inexistentes 404 e corpo inválido 422.
 - **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores.
 - **Validade jurídica:** a assinatura Ed25519 própria não é certificado ICP-Brasil. Antes de um piloto real, valide com um advogado.
 - **Desempenho:** a verificação relê o registro inteiro. Isso basta para a V1, mas exige índices e snapshots em escala.
-- **A API não tem autenticação.** Quem conhece um id de oferta pode registrar o aceite, desde que informe o CNPJ do destinatário. O link de aceite precisa de um token secreto antes de um piloto.
+- **A API não tem autenticação de usuário.** O que importa é protegido por assinatura (organização e agente) ou pelo token de aceite, mas qualquer um consegue, por exemplo, registrar pedidos ou pedir rascunhos.
+- **O token de aceite é um segredo ao portador.** Quem tiver o token e o CNPJ do destinatário consegue aceitar. A transportadora precisa mandá-lo só ao embarcador, por um canal confiável.
 - **Rascunhos pendentes ficam na memória.** Se a API reiniciar, o rascunho que ainda não foi assinado se perde e é preciso preparar de novo.
 - **A API atende uma requisição por vez** (uma trava em volta da plataforma). Basta para a V1.
 
 ## Próximos passos
 
-1. Autenticação na API e token secreto no link de aceite.
+1. Autenticação de usuário na API e página HTML de aceite para o embarcador.
 2. Ancoragem periódica do hash do registro.
 3. Fase 2: extrator com IA (só extração, saída estruturada) e motor de preço por tabela.

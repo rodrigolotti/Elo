@@ -69,7 +69,7 @@ def api(cliente):
                                        "carga": CARGA})
     assert r.status_code == 201, r.text
     return {"cliente": cliente, "chave_org": chave_org, "chave_agente": chave_agente,
-            "agente_id": agente_id, "mandato_id": mandato_id, "pedido_id": r.json()["id"]}
+            "tokens": {}, "agente_id": agente_id, "mandato_id": mandato_id, "pedido_id": r.json()["id"]}
 
 
 def corpo_oferta(api, valor=485_000):
@@ -83,12 +83,16 @@ def emitir(api, valor=485_000):
                                     corpo_oferta(api, valor), api["chave_agente"],
                                     "/ofertas")
     assert r.status_code == 201, r.text
-    return preparado, r.json()
+    emitida = r.json()
+    api["tokens"][emitida["oferta"]["id"]] = emitida["token_aceite"]
+    return preparado, emitida
 
 
-def aceitar(api, oferta_id, cnpj=CNPJ_EMBARC):
-    return api["cliente"].post(f"/ofertas/{oferta_id}/aceite", json={
-        "cnpj": cnpj, "nome": "Maria Exemplo", "email": "maria@exemplo.com"})
+def aceitar(api, oferta_id, cnpj=CNPJ_EMBARC, token=None):
+    """Aceita usando, por padrão, o token devolvido na emissão da oferta."""
+    corpo = {"cnpj": cnpj, "nome": "Maria Exemplo", "email": "maria@exemplo.com",
+             "token": token if token is not None else api["tokens"].get(oferta_id, "x")}
+    return api["cliente"].post(f"/ofertas/{oferta_id}/aceite", json=corpo)
 
 
 def status_na_pagina(texto):
@@ -256,6 +260,52 @@ def test_so_o_destinatario_aceita(api):
     _, emitida = emitir(api)
     r = aceitar(api, emitida["oferta"]["id"], cnpj_ficticio("334445550001"))
     assert r.status_code == 400 and "destinatário" in r.json()["detail"]
+
+
+# ---------- token de aceite ----------
+
+def test_emissao_devolve_token_e_registro_guarda_so_o_hash(api, plataforma):
+    _, emitida = emitir(api)
+    token = emitida["token_aceite"]
+    assert len(token) >= 40
+    assert emitida["token_aceite_hash"].startswith("sha256:")
+    assert token not in emitida["token_aceite_hash"]
+    eventos = [e.payload for e in plataforma.registro.eventos()]
+    assert token not in str(eventos)  # o token puro não vai para o registro
+    assert any(e.get("token_aceite_hash") == emitida["token_aceite_hash"] for e in eventos)
+
+
+def test_aceite_sem_token_e_recusado(api):
+    _, emitida = emitir(api)
+    r = api["cliente"].post(f"/ofertas/{emitida['oferta']['id']}/aceite", json={
+        "cnpj": CNPJ_EMBARC, "nome": "Maria", "email": "maria@exemplo.com"})
+    assert r.status_code == 422
+    r = aceitar(api, emitida["oferta"]["id"], token="")
+    assert r.status_code == 422  # token vazio também
+
+
+def test_aceite_com_token_errado_e_recusado(api):
+    _, a = emitir(api)
+    _, b = emitir(api)
+    r = aceitar(api, a["oferta"]["id"], token="token-inventado")
+    assert r.status_code == 400 and "token" in r.json()["detail"]
+    # token de outra oferta também não serve
+    r = aceitar(api, a["oferta"]["id"], token=b["token_aceite"])
+    assert r.status_code == 400 and "token" in r.json()["detail"]
+    assert aceitar(api, a["oferta"]["id"]).status_code == 201  # o certo continua valendo
+
+
+def test_token_de_aceite_e_de_uso_unico(api):
+    _, emitida = emitir(api)
+    assert aceitar(api, emitida["oferta"]["id"]).status_code == 201
+    r = aceitar(api, emitida["oferta"]["id"])  # mesmo token, de novo
+    assert r.status_code == 400
+
+
+def test_token_errado_nao_revela_o_status_da_oferta(api):
+    _, emitida = emitir(api, 900_000)  # aguardando aprovação
+    r = aceitar(api, emitida["oferta"]["id"], token="errado")
+    assert r.json()["detail"] == "token de aceite inválido"
 
 
 # ---------- página de verificação ----------

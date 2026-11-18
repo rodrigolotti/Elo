@@ -20,6 +20,9 @@ chave dela, usada para atestar aceites recebidos por link.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -114,7 +117,14 @@ class _Rascunho:
     chave_publica: str
     expira_em: datetime
     revalidar: Callable[[], None]
-    montar_payload: Callable[[dict[str, Any]], dict[str, Any]]
+    # recebe o objeto assinado e devolve (payload gravado no registro,
+    # extras que vão só na resposta e nunca para o registro)
+    montar_payload: Callable[[dict[str, Any]], tuple[dict[str, Any], dict[str, Any]]]
+
+
+def hash_token(token: str) -> str:
+    """Hash do token de aceite. O token tem 256 bits aleatórios, então SHA-256 basta."""
+    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class Plataforma:
@@ -146,6 +156,7 @@ class Plataforma:
         self.status_oferta: dict[str, str] = {}
         self.aprovacoes: dict[str, dict[str, Any]] = {}
         self.compromissos: dict[str, dict[str, Any]] = {}
+        self.token_aceite_hash: dict[str, str | None] = {}
         for ev in self.registro.eventos():
             self._aplicar(ev.tipo, ev.payload)
 
@@ -167,6 +178,7 @@ class Plataforma:
             self.ofertas[oferta["id"]] = oferta
             self.ofertas_por_hash[hash_sha256(oferta)] = oferta["id"]
             self.status_oferta[oferta["id"]] = p["status"]
+            self.token_aceite_hash[oferta["id"]] = p.get("token_aceite_hash")
         elif tipo == "oferta_aprovada":
             # .get: num registro adulterado o hash pode não achar a oferta
             oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
@@ -194,8 +206,9 @@ class Plataforma:
     def _guardar_rascunho(self, tipo: str, evento: str, objeto: dict[str, Any],
                           objeto_id: str, chave_publica: str,
                           revalidar: Callable[[], None] = lambda: None,
-                          montar_payload: Callable[[dict[str, Any]], dict[str, Any]]
-                          = lambda assinado: assinado) -> dict[str, Any]:
+                          montar_payload: Callable[[dict[str, Any]],
+                                                   tuple[dict[str, Any], dict[str, Any]]]
+                          = lambda assinado: (assinado, {})) -> dict[str, Any]:
         agora = self._agora()
         for h in [h for h, r in self._rascunhos.items() if r.expira_em < agora]:
             del self._rascunhos[h]
@@ -208,8 +221,9 @@ class Plataforma:
                            tipo: str | None = None) -> dict[str, Any]:
         """Recebe um rascunho assinado por quem tem a chave e grava no registro.
 
-        Retorna o payload gravado (para ofertas: {"oferta", "status", "violacoes"};
-        para os demais: o próprio objeto assinado).
+        Retorna o payload gravado (para ofertas: {"oferta", "status", "violacoes",
+        "token_aceite_hash"}, mais "token_aceite", que só aparece aqui; para os
+        demais: o próprio objeto assinado).
         """
         if not isinstance(assinado, dict):
             raise ErroElo("o objeto assinado precisa ser um objeto JSON")
@@ -234,9 +248,9 @@ class Plataforma:
         del self._rascunhos[chave]
         rascunho.revalidar()  # o estado pode ter mudado desde o rascunho
         objeto = {**rascunho.objeto, "assinatura": assinatura}
-        payload = rascunho.montar_payload(objeto)
+        payload, extras = rascunho.montar_payload(objeto)
         self._incluir(rascunho.evento, payload, rascunho.objeto_id)
-        return payload
+        return {**payload, **extras}
 
     # ---------- organizações e agentes ----------
 
@@ -406,27 +420,35 @@ class Plataforma:
             if not problemas and mandato_id in self.revogacoes:
                 raise ErroElo("o mandato foi revogado depois do rascunho: prepare de novo")
 
+        def montar_payload(assinada: dict[str, Any]) -> tuple[dict, dict]:
+            # token de aceite de uso único: o registro guarda só o hash; o token
+            # puro vai uma única vez na resposta, para a transportadora mandar
+            # ao embarcador junto com o link
+            token = secrets.token_urlsafe(32)
+            return ({"oferta": assinada, "status": status, "violacoes": list(problemas),
+                     "token_aceite_hash": hash_token(token)},
+                    {"token_aceite": token})
+
         rascunho = self._guardar_rascunho(
             "oferta", "oferta_emitida", oferta, oferta["id"], agente["chave_publica"],
-            revalidar,
-            lambda assinada: {"oferta": assinada, "status": status,
-                              "violacoes": list(problemas)},
+            revalidar, montar_payload,
         )
         return rascunho, problemas
 
     def emitir_oferta(self, pedido_id: str, agente_id: str, mandato_id: str,
                       chave_agente: ParDeChaves, condicoes: Condicoes,
-                      valida_ate: str) -> tuple[dict[str, Any], list[str]]:
+                      valida_ate: str) -> tuple[dict[str, Any], list[str], str]:
         """Assina a oferta. Se sair do mandato, fica aguardando aprovação humana.
 
-        Retorna (oferta, lista_de_violacoes). Lista vazia = oferta enviada.
+        Retorna (oferta, lista_de_violacoes, token_aceite). Lista vazia = oferta
+        enviada. O token é exigido no aceite e não é guardado em lugar nenhum.
         """
         if chave_agente.publica_b64 != self._agente(agente_id)["chave_publica"]:
             raise ErroElo("a chave informada não é a chave deste agente")
         rascunho, _ = self.preparar_oferta(pedido_id, agente_id, mandato_id,
                                            condicoes, valida_ate)
         payload = self.registrar_assinado(chave_agente.assinar(rascunho), "oferta")
-        return payload["oferta"], payload["violacoes"]
+        return payload["oferta"], payload["violacoes"], payload["token_aceite"]
 
     def preparar_aprovacao(self, oferta_id: str, aprovado_por: str) -> dict[str, Any]:
         oferta = self._oferta(oferta_id)
@@ -457,14 +479,22 @@ class Plataforma:
     # ---------- aceite do embarcador (via link) ----------
 
     def aceitar_oferta(self, oferta_id: str, cnpj_embarcador: str, nome: str,
-                       email: str) -> dict[str, Any]:
+                       email: str, token: str) -> dict[str, Any]:
         """Registra o aceite feito por uma pessoa pelo link.
+
+        Exige o token de aceite gerado na emissão da oferta. Como cada oferta
+        só pode ser aceita uma vez, o token é de uso único.
 
         O embarcador não tem chave na V1: a plataforma ATESTA o aceite com a
         chave dela. Isso é mais fraco que uma assinatura do próprio embarcador,
         e está documentado como limitação.
         """
         oferta = self._oferta(oferta_id)
+        # o token é conferido antes de tudo: sem ele, nada se revela sobre a oferta
+        esperado = self.token_aceite_hash.get(oferta_id)
+        if (not isinstance(token, str) or not token or esperado is None
+                or not hmac.compare_digest(hash_token(token), esperado)):
+            raise ErroElo("token de aceite inválido")
         status = self.status_oferta[oferta_id]
         if status != "enviada":
             raise ErroElo(f"oferta não pode ser aceita no status '{status}'")
