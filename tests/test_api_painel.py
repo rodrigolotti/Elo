@@ -241,3 +241,31 @@ def test_abaixo_do_teto_nenhum_desafio_e_descartado(api):
     desafios = [desafio(c) for _ in range(MAX_DESAFIOS_POR_CNPJ)]
     for d in desafios:
         assert c.post("/sessoes", json=chave.assinar(d)).status_code == 201
+
+
+# ---------- destinatário e embarcador ----------
+
+def test_api_recusa_oferta_para_a_propria_transportadora(api):
+    from test_api import CARGA, corpo_oferta
+    c = api["cliente"]
+    r = c.post("/pedidos", json={"cnpj_solicitante": CNPJ_TRANSP, "canal": "email", "carga": CARGA})
+    assert r.status_code == 201
+    r = c.post("/ofertas/rascunho", json={**corpo_oferta(api), "pedido_id": r.json()["id"]})
+    assert r.status_code == 400 and "própria transportadora" in r.json()["detail"]
+
+
+def test_consulta_de_ofertas_traz_o_embarcador(api, sessao):
+    from test_api import CARGA, corpo_oferta
+    from conftest import CNPJ_EMBARC
+    c = api["cliente"]
+    r = c.post("/pedidos", json={"cnpj_solicitante": CNPJ_EMBARC, "canal": "email",
+                                 "carga": CARGA, "nome_solicitante": "Comercial Exemplo Ltda"})
+    api["pedido_id"] = r.json()["id"]
+    _, primeira = emitir(api)
+    aceitar(api, primeira["oferta"]["id"])
+    _, segunda = emitir(api, 900_000)
+    [pendente] = c.get("/ofertas", params={"status": "aguardando_aprovacao"}, headers=sessao).json()
+    assert pendente["embarcador"] == {"cnpj": CNPJ_EMBARC, "nome": "Comercial Exemplo Ltda",
+                                      "fretes_fechados": 1}
+    [cp] = c.get("/compromissos", headers=sessao).json()
+    assert cp["embarcador"]["nome"] == "Comercial Exemplo Ltda"

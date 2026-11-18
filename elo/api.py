@@ -82,6 +82,8 @@ class RegistrarPedido(_Corpo):
     canal: str = Field(min_length=1, max_length=40)
     carga: Carga
     mensagem_original: str = Field(default="", max_length=20_000)
+    nome_solicitante: str = Field(default="", max_length=200,
+                                  description="Nome do embarcador, como informado no pedido")
 
 
 class PrepararOferta(_Corpo):
@@ -389,7 +391,8 @@ def criar_app(plataforma: Plataforma | None = None) -> FastAPI:
     def registrar_pedido(corpo: RegistrarPedido) -> dict[str, Any]:
         with trava:
             return plat().registrar_pedido(corpo.cnpj_solicitante, corpo.canal,
-                                           corpo.carga, corpo.mensagem_original)
+                                           corpo.carga, corpo.mensagem_original,
+                                           corpo.nome_solicitante)
 
     # ----- oferta -----
 

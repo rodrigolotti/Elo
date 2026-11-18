@@ -595,13 +595,17 @@ class Plataforma:
     # ---------- pedido e oferta ----------
 
     def registrar_pedido(self, cnpj_solicitante: str, canal: str, carga: Carga,
-                         mensagem_original: str = "") -> dict[str, Any]:
+                         mensagem_original: str = "",
+                         nome_solicitante: str = "") -> dict[str, Any]:
+        """Registra o pedido de cotação. O nome do embarcador é o informado no
+        pedido (o CNPJ não é consultado na Receita)."""
         if not validar_cnpj(cnpj_solicitante):
             raise ErroElo(f"CNPJ do solicitante inválido: {cnpj_solicitante}")
         pedido = {
             "tipo": "pedido",
             "id": _novo_id("pc"),
             "cnpj_solicitante": formatar_cnpj(cnpj_solicitante),
+            "nome_solicitante": nome_solicitante.strip(),
             "canal": canal,
             "carga": carga.model_dump(mode="json"),
             "mensagem_original": mensagem_original,
@@ -623,6 +627,9 @@ class Plataforma:
         mandato = self._mandato(mandato_id)
         if mandato["agente_id"] != agente_id:
             raise ErroElo("o mandato não foi emitido para este agente")
+        if pedido["cnpj_solicitante"] == agente["cnpj"]:
+            raise ErroElo("a oferta não pode ter como destinatário a própria transportadora "
+                          f"que a emite ({agente['cnpj']})")
         agora = self._agora()
         try:
             vence = ler_momento(valida_ate)
@@ -896,9 +903,25 @@ class Plataforma:
                  "revogado_em": self.revogacoes.get(m["id"], {}).get("em")}
                 for m in self.mandatos.values() if m["cnpj"] == cnpj]
 
+    def _embarcador(self, cnpj_org: str, oferta: dict[str, Any]) -> dict[str, Any]:
+        """Quem pediu a cotação: CNPJ, nome informado no pedido e quantos fretes a
+        transportadora já fechou com ele (compromissos firmados)."""
+        destinatario = oferta["destinatario_cnpj"]
+        pedido = self.pedidos.get(oferta.get("referencia", {}).get("pedido_id"), {})
+        nome = pedido.get("nome_solicitante") or next(
+            (p.get("nome_solicitante") for p in reversed(list(self.pedidos.values()))
+             if p["cnpj_solicitante"] == destinatario and p.get("nome_solicitante")), None)
+        fechados = 0
+        for cp in self.compromissos.values():
+            o = self.ofertas.get(self.ofertas_por_hash.get(cp["oferta_hash"], ""))
+            if o and o["emissor"]["cnpj"] == cnpj_org and o["destinatario_cnpj"] == destinatario:
+                fechados += 1
+        return {"cnpj": destinatario, "nome": nome, "fretes_fechados": fechados}
+
     def listar_ofertas(self, cnpj: str, status: str | None = None) -> list[dict[str, Any]]:
         cnpj = self._org(cnpj)["cnpj"]
         return [{"oferta": o,
+                 "embarcador": self._embarcador(cnpj, o),
                  "status": self.status_oferta[o["id"]],
                  "violacoes": self.violacoes_oferta.get(o["id"], []),
                  "aprovacao": self.aprovacoes.get(o["id"]),
@@ -914,6 +937,7 @@ class Plataforma:
             oferta = self.ofertas.get(self.ofertas_por_hash.get(cp["oferta_hash"], ""))
             if oferta is not None and oferta["emissor"]["cnpj"] == cnpj:
                 saida.append({"compromisso": cp, "oferta": oferta,
+                              "embarcador": self._embarcador(cnpj, oferta),
                               "verificacao": f"/verificar/{cp['id']}"})
         return saida
 

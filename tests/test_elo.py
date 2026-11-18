@@ -4,7 +4,7 @@ from conftest import CNPJ_EMBARC, CNPJ_TRANSP, cnpj_ficticio, condicoes
 from elo.canonico import ErroCanonico, canonicalizar, hash_sha256
 from elo.chaves import ParDeChaves, verificar_assinatura
 from elo.cnpj import validar_cnpj
-from elo.modelos import LimitesMandato
+from elo.modelos import Carga, LimitesMandato
 from elo.registro import Registro
 from elo.servico import ErroElo, Plataforma
 
@@ -329,3 +329,49 @@ def test_consultas_so_trazem_a_propria_organizacao(cenario):
 
     p.revogar_mandato(cenario["mandato_id"], cenario["chave_org"])
     assert p.listar_mandatos(CNPJ_TRANSP)[0]["revogado_em"] is not None
+
+
+# ---------- destinatário e embarcador ----------
+
+def test_oferta_para_a_propria_transportadora_e_recusada(cenario):
+    p = cenario["plataforma"]
+    pedido = p.registrar_pedido(CNPJ_TRANSP, "email", Carga(**p.pedidos[cenario["pedido_id"]]["carga"]))
+    with pytest.raises(ErroElo, match="destinatário a própria transportadora"):
+        p.emitir_oferta(pedido["id"], cenario["agente_id"], cenario["mandato_id"],
+                        cenario["chave_agente"], condicoes(), VALIDADE)
+    assert all(o["destinatario_cnpj"] != CNPJ_TRANSP for o in p.ofertas.values())
+
+
+def test_embarcador_com_nome_do_pedido_e_fretes_fechados(cenario):
+    p = cenario["plataforma"]
+    carga = Carga(**p.pedidos[cenario["pedido_id"]]["carga"])
+
+    def oferta_e_aceite(aceitar=True):
+        pedido = p.registrar_pedido(CNPJ_EMBARC, "email", carga, "",
+                                    "Comercial Exemplo Ltda")
+        oferta, _, token = p.emitir_oferta(pedido["id"], cenario["agente_id"],
+                                           cenario["mandato_id"], cenario["chave_agente"],
+                                           condicoes(), VALIDADE)
+        if aceitar:
+            p.aceitar_oferta(oferta["id"], CNPJ_EMBARC, "Maria", "maria@exemplo.com", token)
+        return oferta
+
+    oferta_e_aceite()
+    oferta_e_aceite()
+    aberta = oferta_e_aceite(aceitar=False)
+    item = next(o for o in p.listar_ofertas(CNPJ_TRANSP) if o["oferta"]["id"] == aberta["id"])
+    assert item["embarcador"] == {"cnpj": CNPJ_EMBARC, "nome": "Comercial Exemplo Ltda",
+                                  "fretes_fechados": 2}
+    assert all(c["embarcador"]["fretes_fechados"] == 2 for c in p.listar_compromissos(CNPJ_TRANSP))
+
+
+def test_pedido_sem_nome_usa_o_ultimo_nome_conhecido_do_embarcador(cenario):
+    p = cenario["plataforma"]
+    carga = Carga(**p.pedidos[cenario["pedido_id"]]["carga"])
+    p.registrar_pedido(CNPJ_EMBARC, "email", carga, "", "Comercial Exemplo Ltda")
+    oferta, _, _ = p.emitir_oferta(cenario["pedido_id"], cenario["agente_id"],
+                                   cenario["mandato_id"], cenario["chave_agente"],
+                                   condicoes(), VALIDADE)  # o pedido do cenário não tem nome
+    item = next(o for o in p.listar_ofertas(CNPJ_TRANSP) if o["oferta"]["id"] == oferta["id"])
+    assert item["embarcador"]["nome"] == "Comercial Exemplo Ltda"
+    assert item["embarcador"]["fretes_fechados"] == 0
