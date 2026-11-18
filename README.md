@@ -1,8 +1,9 @@
 # Elo — camada de confiança entre agentes logísticos
 
-**O problema:** agentes de IA de empresas diferentes já conseguem negociar frete
-entre si, mas sem identidade verificável, sem um mandato que limite o que podem
-prometer e sem prova do que foi combinado.
+**O problema:** Agentes de IA de frete já negociam em nome de uma empresa, mas falam
+com o outro lado por canais feitos para humanos. Quando os dois lados tiverem agentes,
+falta identidade verificável, um mandato que limite o que cada um pode prometer e
+prova do que foi combinado.
 
 **O que o Elo faz:**
 
@@ -25,9 +26,11 @@ flowchart LR
 
 *Página pública de verificação: 14 checagens independentes*
 
-### Rodar em 4 comandos (cmd do Windows)
+### Rodar em 6 comandos (cmd do Windows)
 
 ```bat
+git clone https://github.com/rodrigolotti/Elo.git
+cd Elo
 python -m venv .venv
 .venv\Scripts\activate.bat
 pip install pydantic cryptography pytest fastapi uvicorn httpx
