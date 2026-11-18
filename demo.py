@@ -80,8 +80,10 @@ def main() -> None:
     print(f"  Pedido {pedido['id']} de {cnpj_embarc}: SP → PR, 3.200 kg, 14.500 L")
 
     titulo("4. O agente oferece dentro do mandato e o embarcador aceita")
+    # lotação SP → Curitiba, 410 km, 5 eixos: piso da ANTT de R$ 3.457,20
     cond = Condicoes(valor_centavos=485_000, coleta_ate="2026-11-20",
-                     prazo_entrega_dias_uteis=2, inclui=["pedagio", "seguro_rctr_c"])
+                     prazo_entrega_dias_uteis=2, inclui=["pedagio", "seguro_rctr_c"],
+                     modalidade="lotacao", distancia_km=410, eixos=5)
     oferta, problemas, token = plataforma.emitir_oferta(
         pedido["id"], agente["agente_id"], mandato["id"], chave_agente, cond,
         "2026-11-18T18:00:00-03:00")
@@ -101,7 +103,8 @@ def main() -> None:
         Carga(origem_cep="00000-000", origem_uf="SP", destino_cep="22222-222",
               destino_uf="PR", peso_kg=12000, volume_litros=60000, tipo="carga geral"))
     cond2 = Condicoes(valor_centavos=920_000, coleta_ate="2026-11-21",
-                      prazo_entrega_dias_uteis=3)
+                      prazo_entrega_dias_uteis=3,
+                      modalidade="lotacao", distancia_km=410, eixos=5)
     oferta2, problemas2, token2 = plataforma.emitir_oferta(
         pedido2["id"], agente["agente_id"], mandato["id"], chave_agente, cond2,
         "2026-11-19T18:00:00-03:00")

@@ -649,6 +649,9 @@ class Plataforma:
         mandato = self._mandato(mandato_id)
         if mandato["agente_id"] != agente_id:
             raise ErroElo("o mandato não foi emitido para este agente")
+        if condicoes.modalidade is None:
+            raise ErroElo("a oferta precisa informar a modalidade: lotacao ou fracionada "
+                          f"(obrigatória desde o protocolo 0.2)")
         if pedido["cnpj_solicitante"] == agente["cnpj"]:
             raise ErroElo("a oferta não pode ter como destinatário a própria transportadora "
                           f"que a emite ({agente['cnpj']})")

@@ -256,7 +256,9 @@ function emBrasiliaDaqui(ms) {
 // lotação, 500 km, 5 eixos, carga geral: piso da ANTT de R$ 4.071,76
 const LOTACAO_500KM = { modalidade: "lotacao", distancia_km: 500, eixos: 5 };
 
-async function emitirOferta(agente, pedidoId, agenteId, mandatoId, valor, extra = {}) {
+// a modalidade é obrigatória (protocolo 0.2); sem dizer, vai como fracionada
+async function emitirOferta(agente, pedidoId, agenteId, mandatoId, valor,
+                            extra = { modalidade: "fracionada" }) {
   const { rascunho } = await http("POST", "/ofertas/rascunho", {
     pedido_id: pedidoId, agente_id: agenteId, mandato_id: mandatoId,
     condicoes: { valor_centavos: valor, coleta_ate: emBrasiliaDaqui(2 * 864e5).slice(0, 10),
@@ -519,6 +521,17 @@ async function roteiro() {
   const recusar = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 750_000,
                                      { modalidade: "lotacao", eixos: 5 });  // sem distância
   const dentro = await emitirOferta(agente, pedido.id, agenteId, mandatoId, 485_000);
+  const semModalidade = await fetch(`${BASE}/ofertas/rascunho`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pedido_id: pedido.id, agente_id: agenteId, mandato_id: mandatoId,
+      condicoes: { valor_centavos: 485_000, coleta_ate: emBrasiliaDaqui(2 * 864e5).slice(0, 10),
+                   prazo_entrega_dias_uteis: 2 },
+      valida_ate: emBrasiliaDaqui(864e5) }) });
+  if (semModalidade.status !== 400
+      || !(await semModalidade.json()).detail.includes("precisa informar a modalidade")) {
+    falhar("oferta sem modalidade deveria ser recusada (protocolo 0.2)");
+  }
+  ok("oferta sem modalidade é recusada pela API (obrigatória no protocolo 0.2)");
   if (aprovar.status !== "aguardando_aprovacao" || dentro.status !== "enviada") {
     falhar("status das ofertas inesperado");
   }

@@ -76,5 +76,7 @@ def cenario(relogio):
 
 
 def condicoes(valor_centavos: int = 485_000) -> Condicoes:
+    # fracionada: os testes que não tratam do piso da ANTT ficam fora dessa regra
     return Condicoes(valor_centavos=valor_centavos, coleta_ate="2026-11-20",
-                     prazo_entrega_dias_uteis=2, inclui=["pedagio", "seguro_rctr_c"])
+                     prazo_entrega_dias_uteis=2, inclui=["pedagio", "seguro_rctr_c"],
+                     modalidade="fracionada")

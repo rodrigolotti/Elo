@@ -11,9 +11,10 @@ Módulos:
 """
 
 VERSAO_PROTOCOLO = "0.2"
-"""0.2: em carga lotação, a oferta precisa trazer distância e eixos (sem eles, o
-piso da ANTT não pode ser conferido e a oferta vai para aprovação); aprovar
-oferta abaixo do piso exige justificativa. Ofertas 0.1 seguem as regras de 0.1."""
+"""0.2: toda oferta informa a modalidade (lotação ou fracionada); em lotação, sem
+distância, sem eixos ou com tipo de carga fora da lista da ANTT, o piso não pode
+ser conferido e a oferta vai para aprovação; aprovar oferta abaixo do piso exige
+justificativa. Ofertas 0.1 seguem as regras de 0.1."""
 
 
 def versao_ao_menos(versao: str | None, minima: str) -> bool:

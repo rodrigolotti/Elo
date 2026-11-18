@@ -74,7 +74,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 375 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 377 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -320,9 +320,12 @@ de tipos de carga do pedido e do mandato.
 mandato e a verificação usam **só** esses dados assinados e a tabela vigente na data
 de emissão da oferta, então um reajuste da ANTT não muda compromissos antigos.
 
-**Sem brecha (protocolo 0.2).** Em lotação, a oferta precisa trazer distância e
-eixos. Sem eles, vai para aprovação com o motivo "distância não informada: não foi
-possível conferir o piso da ANTT" (ou "eixos não informados…"), e o cartão mostra a
+**Sem brecha (protocolo 0.2).** Toda oferta precisa informar a **modalidade**
+(`lotacao` ou `fracionada`): sem ela, a API recusa a oferta. Em lotação, a oferta
+precisa trazer distância e eixos e ter um tipo de carga da lista da ANTT. Se faltar
+algum deles, vai para aprovação com o motivo, por exemplo "distância não informada:
+não foi possível conferir o piso da ANTT", "eixos não informados…" ou "tipo de carga
+fora da lista da ANTT…" (no caso de pedido antigo em texto livre). O cartão mostra a
 estimativa por CEP como apoio. A regra vale para ofertas emitidas no protocolo 0.2 em
 diante. A versão vai assinada na oferta, então as de 0.1 continuam verificadas pelas
 regras com que foram emitidas.
@@ -501,7 +504,7 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - **Quem controla o banco inteiro pode reescrever a corrente toda.** A defesa é publicar periodicamente o hash mais recente num lugar externo (ancoragem). Ainda não está implementado.
 - **A existência do CNPJ na Receita não é consultada**, só os dígitos verificadores. O nome do embarcador mostrado no painel é o informado no pedido, sem conferência.
 - **Peso cubado com fator fixo de 300 kg/m³**, a praxe do rodoviário. Contratos com outro fator ainda não são considerados.
-- **Piso da ANTT só da Tabela A** (carga lotação com contratação da composição veicular ou do caminhão simples). As Tabelas B (só a unidade de tração), C e D (alto desempenho) e a carga fracionada não são cobertas. Ofertas sem modalidade, distância ou eixos não passam pela regra do piso, e ofertas emitidas antes de 30/09/2026 também não, porque não há tabela anterior guardada.
+- **Piso da ANTT só da Tabela A** (carga lotação com contratação da composição veicular ou do caminhão simples). As Tabelas B (só a unidade de tração), C e D (alto desempenho) e a carga fracionada não são cobertas. Ofertas do protocolo 0.1 (anteriores à modalidade obrigatória) seguem as regras com que foram emitidas: sem modalidade, distância ou eixos, não passam pela regra do piso. Ofertas emitidas antes de 30/09/2026 também não passam, porque não há tabela anterior guardada.
 - **O piso é o mínimo legal, não o custo da transportadora.** "Acima do piso" não quer dizer que o frete dá lucro.
 - **A tabela da ANTT é atualizada à mão** a cada reajuste. Até a nova tabela entrar no código, vale a anterior.
 - **A distância estimada é aproximada** (linha reta entre as sedes municipais × 1,25) e depende do ViaCEP, que recebe os CEPs de origem e destino. Ela nunca entra na regra do mandato.

@@ -46,9 +46,7 @@ def test_lotacao_no_piso_ou_acima_nao_e_violacao(cenario):
 @pytest.mark.parametrize("extra", [
     {"modalidade": "fracionada", "distancia_km": 500, "eixos": 5},  # piso não vale
     {"modalidade": "fracionada"},                                    # nem exige distância
-    {"distancia_km": 500, "eixos": 5},                               # modalidade não informada
-    {},                                                              # oferta como antes
-], ids=["fracionada", "fracionada-sem-dados", "sem-modalidade", "como-antes"])
+], ids=["fracionada", "fracionada-sem-dados"])
 def test_fora_da_lotacao_nao_ha_regra_de_piso(cenario, extra):
     _, problemas, _ = emitir(cenario, condicoes(100_000, **extra))
     assert problemas == []
@@ -76,9 +74,9 @@ def test_campos_vao_assinados_e_oferta_sem_eles_fica_como_antes(cenario):
     assert verificar_assinatura(oferta, p.agentes[cenario["agente_id"]]["chave_publica"])
     adulterada = {**oferta, "condicoes": {**oferta["condicoes"], "distancia_km": 50}}
     assert not verificar_assinatura(adulterada, p.agentes[cenario["agente_id"]]["chave_publica"])
-    antiga, _, _ = emitir(cenario, condicoes(485_000))
-    assert set(antiga["condicoes"]) == {"valor_centavos", "coleta_ate",
-                                        "prazo_entrega_dias_uteis", "inclui"}
+    fracionada, _, _ = emitir(cenario, condicoes(485_000, modalidade="fracionada"))
+    assert set(fracionada["condicoes"]) == {"valor_centavos", "coleta_ate",
+                                            "prazo_entrega_dias_uteis", "inclui", "modalidade"}
 
 
 def test_compromisso_abaixo_do_piso_aprovado_continua_valido(cenario):
@@ -159,7 +157,6 @@ def test_frete_com_distancia_estimada_pelo_cep(api, sessao):
 
 @pytest.mark.parametrize("extra, motivo", [
     ({"modalidade": "fracionada", "distancia_km": 500, "eixos": 5}, "carga fracionada"),
-    ({"distancia_km": 500, "eixos": 5}, "não informou se é lotação ou fracionada"),
     ({"modalidade": "lotacao", "distancia_km": 500}, "não informou o número de eixos"),
 ])
 def test_frete_explica_quando_nao_ha_piso(api, sessao, extra, motivo):
@@ -269,3 +266,58 @@ def test_api_lotacao_sem_distancia_preve_aprovacao(api):
     corpo["condicoes"] = {**corpo["condicoes"], "modalidade": "lotacao", "eixos": 5}
     r = api["cliente"].post("/ofertas/rascunho", json=corpo).json()
     assert r["status_previsto"] == "aguardando_aprovacao" and r["violacoes"] == [SEM_DISTANCIA]
+
+
+# ---------- protocolo 0.2: modalidade obrigatória e tipo fora da lista ----------
+
+from elo.mandato import SEM_MODALIDADE, TIPO_FORA_DA_LISTA, violacoes  # noqa: E402
+from elo.modelos import LimitesMandato  # noqa: E402
+from test_api import LIMITES  # noqa: E402
+
+
+@pytest.mark.parametrize("extra", [{}, {"distancia_km": 500, "eixos": 5}],
+                         ids=["sem-nada", "sem-modalidade"])
+def test_oferta_sem_modalidade_e_recusada(cenario, extra):
+    with pytest.raises(ErroElo, match="precisa informar a modalidade: lotacao ou fracionada"):
+        emitir(cenario, condicoes(485_000, **extra))
+
+
+def test_api_recusa_oferta_sem_modalidade(api):
+    corpo = corpo_oferta(api)
+    corpo["condicoes"] = {k: v for k, v in corpo["condicoes"].items() if k != "modalidade"}
+    r = api["cliente"].post("/ofertas/rascunho", json=corpo)
+    assert r.status_code == 400 and "precisa informar a modalidade" in r.json()["detail"]
+
+
+def test_regra_da_modalidade_depende_da_versao_do_protocolo(cenario):
+    """Oferta 0.2 sem modalidade (só existiria num registro adulterado) não passa;
+    a mesma oferta em 0.1 continua como foi emitida."""
+    carga = Carga(**cenario["plataforma"].pedidos[cenario["pedido_id"]]["carga"])
+    momento = datetime(2026, 11, 17, 9, tzinfo=BRT)
+    sem_modalidade = condicoes(485_000)
+    assert violacoes(LimitesMandato(**LIMITES), carga, sem_modalidade, momento, None, "0.2") \
+        == [SEM_MODALIDADE]
+    assert violacoes(LimitesMandato(**LIMITES), carga, sem_modalidade, momento, None, "0.1") == []
+    assert violacoes(LimitesMandato(**LIMITES), carga, sem_modalidade, momento, None, None) == []
+
+
+def test_lotacao_com_tipo_fora_da_lista_vai_para_aprovacao(cenario):
+    """Pedido e mandato antigos em texto livre ("mudança"): o mandato aceita (mesmo
+    texto), mas em lotação não há como conferir o piso."""
+    from test_api import CARGA
+    p = cenario["plataforma"]
+    mandato = cenario["chave_org"].assinar({
+        **p.mandatos[cenario["mandato_id"]], "id": "md_antigo",
+        "limites": {**LIMITES, "tipos_carga": ["mudança"]}})
+    p._incluir("mandato_emitido", mandato, "md_antigo")
+    p._incluir("pedido_recebido", {**p.pedidos[cenario["pedido_id"]], "id": "pc_antigo",
+                                   "carga": {**CARGA, "tipo": "mudança"}}, "pc_antigo")
+    oferta, problemas, _ = p.emitir_oferta("pc_antigo", cenario["agente_id"], "md_antigo",
+                                           cenario["chave_agente"],
+                                           condicoes(485_000, **LOTACAO), VALIDADE)
+    assert problemas == [TIPO_FORA_DA_LISTA]
+    assert p.status_oferta[oferta["id"]] == "aguardando_aprovacao"
+    _, problemas, _ = p.emitir_oferta("pc_antigo", cenario["agente_id"], "md_antigo",
+                                      cenario["chave_agente"],
+                                      condicoes(485_000, modalidade="fracionada"), VALIDADE)
+    assert problemas == []  # fracionada: o piso não se aplica

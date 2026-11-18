@@ -98,7 +98,9 @@ def executar(cliente: httpx.Client) -> list[str]:
             "condicoes": {"valor_centavos": valor,
                           "coleta_ate": (agora + timedelta(days=3)).date().isoformat(),
                           "prazo_entrega_dias_uteis": 2,
-                          "inclui": ["pedagio", "seguro_rctr_c"]},
+                          "inclui": ["pedagio", "seguro_rctr_c"],
+                          # lotação SP → Curitiba: piso da ANTT de R$ 3.457,20
+                          "modalidade": "lotacao", "distancia_km": 410, "eixos": 5},
             "valida_ate": (agora + timedelta(days=1)).isoformat(timespec="seconds"),
         }, chave_agente, "/ofertas")
         oferta_id = emitida["oferta"]["id"]
@@ -133,7 +135,8 @@ def executar(cliente: httpx.Client) -> list[str]:
         "mandato_id": mandato["id"],
         "condicoes": {"valor_centavos": 100_000,
                       "coleta_ate": (agora + timedelta(days=3)).date().isoformat(),
-                      "prazo_entrega_dias_uteis": 1},
+                      "prazo_entrega_dias_uteis": 1,
+                      "modalidade": "lotacao", "distancia_km": 410, "eixos": 5},
         "valida_ate": (agora + timedelta(days=1)).isoformat(timespec="seconds"),
     }))
     print(f"   nova oferta de R$ 1.000 já sai do mandato: {'; '.join(preparado['violacoes'])}")

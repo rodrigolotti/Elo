@@ -23,6 +23,10 @@ def _categoria(tipo: str) -> str:
 AVISO_PISO = "abaixo do piso mínimo da ANTT: risco de multa e indenização"
 SEM_DISTANCIA = "distância não informada: não foi possível conferir o piso da ANTT"
 SEM_EIXOS = "eixos não informados: não foi possível conferir o piso da ANTT"
+TIPO_FORA_DA_LISTA = ("tipo de carga fora da lista da ANTT: não foi possível conferir o "
+                      "piso da ANTT")
+SEM_MODALIDADE = ("modalidade não informada: não foi possível saber se o piso da ANTT "
+                  "se aplica")
 
 
 def abaixo_do_piso(problemas: list[str]) -> bool:
@@ -71,14 +75,20 @@ def violacoes(
     """
     problemas: list[str] = []
 
-    # protocolo 0.2: em lotação, sem distância ou eixos o piso não pode ser
-    # conferido; a oferta não passa direto (vai para aprovação)
-    if (condicoes.modalidade == "lotacao" and versao_ao_menos(versao_protocolo, "0.2")
-            and tabela_vigente(momento) is not None):
-        if condicoes.distancia_km is None:
-            problemas.append(SEM_DISTANCIA)
-        if condicoes.eixos is None:
-            problemas.append(SEM_EIXOS)
+    # protocolo 0.2: em lotação, sem distância, sem eixos ou com tipo de carga
+    # fora da lista, o piso não pode ser conferido; a oferta não passa direto.
+    # A modalidade é obrigatória (preparar_oferta recusa sem ela); se aparecer
+    # uma oferta 0.2 sem modalidade (registro adulterado), ela também não passa.
+    if versao_ao_menos(versao_protocolo, "0.2") and tabela_vigente(momento) is not None:
+        if condicoes.modalidade is None:
+            problemas.append(SEM_MODALIDADE)
+        elif condicoes.modalidade == "lotacao":
+            if condicoes.distancia_km is None:
+                problemas.append(SEM_DISTANCIA)
+            if condicoes.eixos is None:
+                problemas.append(SEM_EIXOS)
+            if normalizar_tipo_carga(carga.tipo) is None:
+                problemas.append(TIPO_FORA_DA_LISTA)
 
     piso = piso_da_oferta(carga, condicoes, momento)
     if piso is not None and condicoes.valor_centavos < piso["piso_centavos"]:

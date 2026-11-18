@@ -25,8 +25,9 @@ CARGA = {"origem_cep": "00000-000", "origem_uf": "SP", "destino_cep": "11111-111
 
 
 def cond(valor=485_000):
+    # fracionada: os testes que não tratam do piso da ANTT ficam fora dessa regra
     return {"valor_centavos": valor, "coleta_ate": "2026-11-20",
-            "prazo_entrega_dias_uteis": 2, "inclui": ["pedagio"]}
+            "prazo_entrega_dias_uteis": 2, "inclui": ["pedagio"], "modalidade": "fracionada"}
 
 
 @pytest.fixture
