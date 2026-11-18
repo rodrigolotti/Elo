@@ -8,24 +8,25 @@ prova do que foi combinado.
 **O que o Elo faz:**
 
 - Dá a cada agente um certificado assinado pela empresa e um mandato com limites de valor, rotas, cargas e validade.
-- Confere cada oferta assinada contra o mandato com código determinístico e manda o que sair dele para aprovação humana.
+- Confere cada oferta assinada contra o mandato com código determinístico e manda o que sair dele para uma pessoa da empresa aprovar ou recusar, com assinatura.
 - Grava tudo num registro encadeado por hashes, que qualquer parte verifica sozinha numa página pública.
-- Dá à transportadora um painel web em que a chave da organização é gerada e usada só no navegador.
+- Dá à transportadora um painel web em que a chave da organização é gerada e usada só no navegador, com recuperação por arquivo cifrado e frase-senha.
 
 ```mermaid
 flowchart LR
     A[Pedido de cotação] --> B[Oferta assinada<br/>pelo agente]
     B --> C{Verificador<br/>de mandato}
     C -- dentro do mandato --> E[Aceite do embarcador<br/>com token de uso único]
-    C -- fora do mandato --> D[Aprovação humana<br/>assinada pela empresa]
-    D --> E
+    C -- fora do mandato --> D{Aprovação ou recusa<br/>assinada pela empresa}
+    D -- aprovada --> E
+    D -- recusada --> X[Oferta encerrada]
     E --> F[Registro encadeado<br/>por hashes]
     F --> G[Página pública<br/>de verificação]
 ```
 
-![Página pública de verificação mostrando o compromisso válido, com 14 de 14 checagens OK](docs/verificacao.png)
+![Página pública de verificação mostrando o compromisso válido, com 15 de 15 checagens OK](docs/verificacao.png)
 
-*Página pública de verificação: 14 checagens independentes*
+*Página pública de verificação: 15 checagens independentes (dados fictícios)*
 
 ### Rodar em 6 comandos (cmd do Windows)
 
@@ -47,7 +48,8 @@ num segundo `cmd` na mesma pasta, `.venv\Scripts\activate.bat` e
 - É um protótipo com dados fictícios, não usado em produção nem validado juridicamente (a assinatura Ed25519 não é ICP-Brasil).
 - O aceite do embarcador é atestado pela plataforma, não assinado por ele.
 - Quem controla o banco inteiro pode reescrever a corrente (falta ancoragem externa).
-- Nesta versão, se a chave da organização se perder no navegador, não há como recuperá-la. A chave de recuperação é a próxima etapa.
+- Quem tiver o arquivo de recuperação e a frase-senha toma a organização na hora: ainda não há prazo de espera para a chave antiga cancelar.
+- Ainda não está pronto para a internet: `POST /pedidos` e os rascunhos não exigem autenticação.
 - O agente ainda não usa IA: as ofertas vêm de um cliente de demonstração. A extração com IA é a Fase 2.
 
 A lista completa está em [Limitações conhecidas (honestas)](#limitações-conhecidas-honestas).
@@ -71,7 +73,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 185 testes (26 do núcleo + 55 da API + 104 do painel)
+python3 -m pytest -q     # 247 testes (os de JavaScript precisam de Node; sem ele, são pulados)
 ```
 
 ## API no Windows (cmd)
@@ -115,7 +117,7 @@ Abra no navegador:
 ```
 
 Abra esse link no navegador (ou rode `start http://127.0.0.1:8000/verificar/<id>`
-no `cmd`). A página mostra as 14 checagens com OK ou FALHA e o resultado final.
+no `cmd`). A página mostra as 15 checagens com OK ou FALHA e o resultado final.
 A documentação interativa da API fica em http://127.0.0.1:8000/docs.
 O painel da transportadora fica em http://127.0.0.1:8000/painel/ (veja abaixo).
 Para parar a API, use `Ctrl+C` na janela em que ela está rodando.
@@ -136,6 +138,8 @@ Toda operação que precisa da assinatura de uma empresa tem dois passos:
 | --- | --- | --- |
 | `POST /organizacoes/rascunho` → `POST /organizacoes` | Cadastra a organização | a própria organização |
 | `POST /agentes/rascunho` → `POST /agentes` | Emite o certificado do agente | organização |
+| `POST /organizacoes/recuperacao/rascunho` → `POST /organizacoes/recuperacao` | Define ou troca a chave de recuperação | organização |
+| `POST /organizacoes/rotacao/rascunho` → `POST /organizacoes/rotacao` | Troca a chave principal (sem sessão: é o caminho de quem perdeu a chave) | chave de **recuperação** |
 | `POST /mandatos/rascunho` → `POST /mandatos` | Emite o mandato | organização |
 | `POST /mandatos/{id}/revogacao/rascunho` → `POST /mandatos/{id}/revogacao` | Revoga o mandato | organização |
 | `POST /pedidos` | Registra o pedido de cotação | ninguém |
@@ -178,6 +182,8 @@ servidos pelo próprio FastAPI, sem framework e sem etapa de build.
 | Mandatos | Define valor máximo, UFs, tipos de carga e validade, e revoga mandatos |
 | Aprovações | Fila das ofertas fora do mandato, com o motivo de cada uma: aprovar ou recusar |
 | Histórico | Compromissos firmados, com link para `/verificar/{id}` |
+| Segurança | Chave principal, chave de recuperação, histórico de chaves e "gerar nova chave de recuperação" |
+| Recuperar | Troca a chave da organização com o arquivo de recuperação e a frase-senha |
 
 **A chave da organização nunca sai do navegador.** Ela é criada com a Web Crypto
 API (Ed25519) marcada como **não exportável** e guardada no IndexedDB como
@@ -197,13 +203,48 @@ caracteres de controle e a ordenação por unidades UTF-16. Depois provam que
 assinaturas feitas em JavaScript são aceitas pela API. Um inteiro acima de 2^53
 é recusado no navegador, porque o JavaScript o arredondaria sem avisar.
 
-**Se o navegador perder a chave.** Isso acontece ao limpar os dados do site,
-trocar de computador, usar janela anônima ou, no Safari, ficar 7 dias sem abrir
-o painel. Sem a chave, a organização não cria agentes, não emite mandatos, não
-aprova nem recusa ofertas e **não consegue revogar mandatos**. Os compromissos
-já firmados continuam válidos. Nesta versão não há recuperação, e a tela de
-cadastro avisa disso. A próxima etapa traz uma chave de recuperação guardada
-fora do navegador.
+### Se o navegador perder a chave: recuperação
+
+A chave principal se perde ao limpar os dados do site, trocar de computador,
+usar janela anônima ou, no Safari, ficar 7 dias sem abrir o painel. Sem ela, a
+organização não cria agentes, não emite mandatos, não aprova nem recusa ofertas e
+não revoga mandatos. Por isso o cadastro tem um segundo passo obrigatório.
+
+**Chave de recuperação.** É um segundo par Ed25519 que só serve para trocar a
+chave principal. No cadastro (ou na aba Segurança), o painel:
+
+1. gera a chave de recuperação e uma **frase-senha** de 25 caracteres (125 bits),
+   mostrada uma vez só, com o aviso de anotá-la em papel e **guardá-la separada
+   do arquivo**;
+2. cifra a chave privada de recuperação num arquivo `elo-recuperacao-<cnpj>.json`
+   que a pessoa baixa;
+3. pede para digitar **dois grupos sorteados** da frase; sem acertar, não conclui;
+4. registra só a parte pública, assinada pela chave principal.
+
+**O arquivo.** PBKDF2-HMAC-SHA256 com **600.000 iterações**, o número da
+[OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+(a OWASP prefere Argon2id, mas a Web Crypto do navegador só oferece PBKDF2), e
+AES-256-GCM. O cabeçalho (CNPJ, chave e parâmetros do KDF) é autenticado junto: alterar
+qualquer coisa, inclusive baixar as iterações, impede a abertura. Frase errada ou
+arquivo adulterado são recusados com mensagem clara. `elo/recuperacao.py` lê e
+grava o mesmo formato, e os testes abrem no Python arquivos gerados pelo
+JavaScript e vice-versa: a chave pode ser aberta sem o painel.
+
+**Recuperar.** Em "Perdi a chave deste navegador ou estou em outro computador",
+a pessoa abre o arquivo com a frase (tudo no navegador; nada disso vai para o
+servidor). O painel guarda um **novo** arquivo de recuperação, com a mesma
+confirmação de dois grupos, e então registra a troca da chave principal,
+assinada pela chave de recuperação. Depois da troca:
+
+- o arquivo usado deixa de valer, e a chave antiga não entra nem assina mais;
+- sessões, desafios e rascunhos pendentes da organização são encerrados;
+- com a opção marcada por padrão, **todos os mandatos ativos são revogados**,
+  para o caso de a chave antiga ter sido roubada e não só perdida;
+- compromissos anteriores continuam válidos: cada assinatura é conferida contra
+  a chave que valia quando o objeto entrou no registro.
+
+Sem o arquivo **e** a frase-senha, perder a chave principal continua sendo
+definitivo: o Elo não guarda nenhum dos dois.
 
 ### Verificação num Chrome de verdade
 
@@ -216,8 +257,14 @@ com um perfil vazio. Ele percorre todas as telas e faz também o papel do agente
 e do embarcador. No caminho, confere:
 
 - se a chave no IndexedDB está como `extractable: false`;
-- se houve algum erro de console ou de CSP;
-- se algum corpo enviado ao servidor levou chave privada.
+- se a confirmação da frase-senha recusa grupos errados;
+- a recuperação num "outro computador" (um segundo contexto do navegador, com
+  IndexedDB próprio): frase errada mostra a mensagem na tela, os mandatos ficam
+  revogados, uma oferta nova com eles sai do mandato, os compromissos antigos
+  continuam com 15 de 15 e a chave antiga não entra mais;
+- se houve algum erro de console ou de CSP, ou algum `null` na tela;
+- se algum corpo enviado ao servidor levou chave privada, arquivo de recuperação
+  ou frase-senha.
 
 As capturas de tela vão para a pasta informada. Use `CHROME` para indicar outro
 navegador e `PYTHON` para outro interpretador. Ele fica fora do `pytest` porque
@@ -249,12 +296,13 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - Aprovação humana assinada com a chave da organização, ou recusa definitiva, também assinada e gravada no registro. Uma oferta recusada não pode mais ser aprovada nem aceita.
 - Aceite do embarcador por link, atestado pela plataforma. Exige o token de aceite de uso único gerado na emissão da oferta. Só o destinatário pode aceitar, só dentro da validade e uma vez só.
 - Registro SQLite só de inclusão: os gatilhos recusam UPDATE e DELETE, e a corrente de hashes denuncia adulteração direta no arquivo.
-- Relatório de verificação com 14 checagens independentes, refeitas a partir do registro.
+- Relatório de verificação com 15 checagens independentes, refeitas a partir do registro.
 - API HTTP (FastAPI) em que as empresas assinam do lado delas: a API nunca recebe chave privada.
-- Página pública `/verificar/{id}`, em português, com as 14 checagens (OK ou FALHA) e o resultado final.
+- Página pública `/verificar/{id}`, em português, com as 15 checagens (OK ou FALHA) e o resultado final.
 - Registro persistido no arquivo de `ELO_DB` (padrão `elo.db`): compromissos continuam verificáveis depois de reiniciar a API.
 - Login no painel por desafio assinado com a chave da organização. As consultas exigem sessão e mostram só os dados da própria organização.
 - Painel web da transportadora em `/painel`: cadastro, agentes, mandatos com revogação, fila de aprovação e histórico, com a chave da organização só no navegador.
+- Chave de recuperação em arquivo cifrado (PBKDF2-HMAC-SHA256 com 600.000 iterações + AES-256-GCM) e troca da chave principal registrada no protocolo, com histórico de chaves verificado na 15ª checagem.
 
 ## Estrutura
 
@@ -268,11 +316,15 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 | `elo/registro.py` | Registro de eventos com hashes encadeados |
 | `elo/servico.py` | Fluxo completo e verificação de compromissos |
 | `elo/sessoes.py` | Login por desafio assinado e sessões do painel |
+| `elo/recuperacao.py` | Lê e grava o arquivo de recuperação (mesmo formato do painel) |
 | `elo/api.py` | API HTTP, página de verificação e entrega do painel (sem regra de negócio) |
 | `elo/painel/` | Painel web: `index.html`, `estilo.css` e os módulos em `js/` |
 | `elo/painel/js/canonico.js`, `assinatura.js` | Canonicalização e assinatura Ed25519 no navegador, compatíveis com o Python |
 | `elo/painel/js/cofre.js` | Guarda a chave não exportável no IndexedDB |
 | `elo/painel/js/conferencia.js` | Confere o rascunho antes de assinar |
+| `elo/painel/js/recuperacao.js` | Frase-senha e arquivo de recuperação (PBKDF2 + AES-GCM) |
+| `elo/painel/js/chave.js` | Telas da chave: passo de recuperação, Segurança e Recuperar |
+| `elo/painel/js/app.js`, `ui.js` | Navegação, telas do dia a dia e componentes comuns |
 | `tests/js/navegador_node.mjs` | Roda os módulos do painel no Node para os testes de compatibilidade |
 | `tests/e2e/painel_chrome.mjs` | Percorre o painel num Chrome headless |
 | `demo_api.py` | Cliente de demonstração: gera as chaves localmente e chama a API |
@@ -283,6 +335,8 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - **A plataforma não guarda nem recebe as chaves privadas das empresas.** Ela prepara o rascunho, a empresa assina do lado dela e devolve o objeto assinado. A chave da própria plataforma (usada para atestar aceites) é gerada a cada início da API e fica só na memória; a parte pública vai para o registro, então aceites antigos continuam verificáveis.
 - **O registro é a fonte da verdade.** O estado em memória é reconstruído a partir dele, e a verificação sempre relê o registro.
 - **A chave da organização mora no navegador, e o painel não assina às cegas.** Ela é criada não exportável, e cada rascunho é conferido antes da assinatura. A página tem CSP só com script e estilo do próprio servidor, e nenhum dado vindo da API é interpretado como HTML. Um XSS poderia usar a chave enquanto a página estivesse aberta (não copiá-la), então a defesa é não deixar script estranho rodar.
+- **Recuperação sem custódia.** O Elo não guarda a chave da organização nem a de recuperação. A frase-senha é gerada pelo painel (125 bits) porque quem tiver o arquivo pode testar frases offline sem limite, e uma frase escolhida por pessoas costuma ser fraca.
+- **O histórico de chaves é verificado, não presumido.** Definição de recuperação e troca de chave são eventos assinados no registro. Um evento de chave com assinatura inválida não muda as chaves vigentes e aparece como FALHA, com o motivo, na checagem "Histórico de chaves da organização íntegro".
 - **Login sem senha.** Entrar no painel é assinar um desafio com a chave da organização. Desafios e sessões não são atos do protocolo: ficam na memória, fora do registro.
 - **A regra do mandato é código determinístico.** Quando o agente com IA chegar (Fase 2), ele só vai extrair dados. Um e-mail malicioso não consegue mudar o que o código autoriza.
 
@@ -295,7 +349,10 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 - **Desempenho:** a verificação relê o registro inteiro. Isso basta para a V1, mas exige índices e snapshots em escala.
 - **As consultas exigem sessão, mas as rotas de escrita não.** O que importa é protegido por assinatura (organização e agente) ou pelo token de aceite, mas qualquer um consegue, por exemplo, registrar pedidos ou pedir rascunhos. Os desafios de login têm teto de 5 pendentes por organização: passou disso, o mais antigo é descartado.
 - **`POST /pedidos` não exige assinatura nem sessão.** Qualquer pessoa consegue registrar pedidos de cotação em nome de qualquer CNPJ, e cada pedido entra no registro, que só cresce. Antes de ir para a internet, essa rota precisa de proteção: autenticação de quem envia (o canal de entrada ou o embarcador), limite de requisições e de tamanho.
-- **Perder a chave da organização no navegador é irreversível nesta versão.** A chave de recuperação vem na próxima etapa.
+- **Arquivo e frase-senha juntos tomam a organização.** A troca de chave vale na hora: não há prazo de espera nem segunda aprovação. O evento fica no registro e as sessões abertas caem, mas a chave antiga não consegue cancelar a troca.
+- **Sem o arquivo e a frase-senha, perder a chave principal é definitivo.** O Elo não guarda nenhum dos dois.
+- **Um navegador por vez.** A organização tem uma chave principal; recuperar num computador invalida a chave guardada nos outros.
+- **A chave de recuperação é exportável por um instante:** entre ser gerada e ser cifrada no arquivo, e ao ser aberta (para conferir que corresponde à chave pública declarada).
 - **Zerar bytes em memória no JavaScript é melhor esforço, não garantia.** O painel zera com `fill(0)` a chave de recuperação em PKCS#8 depois de cifrá-la ou de importá-la, mas o motor JavaScript e a Web Crypto podem ter feito cópias internas que o código não alcança, e a frase-senha é uma string, que não pode ser zerada. A proteção real é a chave principal ser não exportável e a de recuperação só existir em claro por um instante.
 - **O navegador pode negar o armazenamento persistente.** Nesse caso ele pode apagar o IndexedDB se faltar espaço, e o painel avisa quando isso acontece.
 - **Sessões ficam na memória.** Se a API reiniciar, é preciso entrar de novo no painel.
@@ -305,7 +362,8 @@ token é de uso único: reenviá-lo depois do aceite é recusado.
 
 ## Próximos passos
 
-1. Chave de recuperação da organização e rotação de chave registrada no protocolo.
+1. Prazo de espera na recuperação (por exemplo, 48 h): a troca de chave fica pendente e a chave principal antiga pode cancelá-la nesse período, como defesa contra arquivo e frase-senha roubados.
 2. Página HTML de aceite para o embarcador.
 3. Ancoragem periódica do hash do registro.
-4. Fase 2: extrator com IA (só extração, saída estruturada) e motor de preço por tabela.
+4. Proteção de `POST /pedidos` e dos rascunhos antes de ir para a internet.
+5. Fase 2: extrator com IA (só extração, saída estruturada) e motor de preço por tabela.

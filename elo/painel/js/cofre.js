@@ -5,8 +5,9 @@
 // disco não pode ser lido como bytes por este código nem por outro script
 // da página.
 //
-// ATENÇÃO: limpar os dados do site apaga a chave, e sem ela a organização não
-// assina mais nada. A recuperação vem na próxima etapa.
+// ATENÇÃO: limpar os dados do site apaga a chave. A partir daí, só o arquivo
+// de recuperação com a frase-senha (chave.js) devolve à organização uma chave
+// que assina; sem eles, a perda é definitiva.
 
 const BANCO = "elo-painel";
 const VERSAO = 1;
@@ -45,8 +46,8 @@ export async function pedirArmazenamentoPersistente() {
 }
 
 /**
- * Guarda a chave de uma organização. Recusa sobrescrever: perder a chave de
- * uma organização já cadastrada é irreversível nesta versão.
+ * Guarda a chave de uma organização. Recusa sobrescrever: apagar sem querer a
+ * chave de uma organização já cadastrada obrigaria a uma recuperação.
  */
 export function guardarChave({ cnpj, razaoSocial, chaveId, par, chavePublica }) {
   return transacao("readwrite", (loja) => loja.add({
