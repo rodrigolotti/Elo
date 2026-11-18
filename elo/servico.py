@@ -115,6 +115,7 @@ class ChaveOrg:
     chave_publica: str
     desde_seq: int
     ate_seq: int | None = None  # None = vigente
+    desde_em: str | None = None  # quando passou a valer (ISO 8601), para exibir
 
     def valia_em(self, seq: int) -> bool:
         return self.desde_seq <= seq and (self.ate_seq is None or seq < self.ate_seq)
@@ -128,6 +129,7 @@ class EventoChave:
     tipo: str
     valido: bool
     motivo: str = ""
+    em: str | None = None
 
 
 @dataclass
@@ -202,7 +204,8 @@ class Plataforma:
             self.chaves_plataforma[p["chave_id"]] = p["chave_publica"]
         elif tipo == "organizacao_cadastrada":
             self.organizacoes[p["cnpj"]] = p
-            self.chaves_org[p["cnpj"]] = [ChaveOrg(p["chave_id"], p["chave_publica"], seq)]
+            self.chaves_org[p["cnpj"]] = [ChaveOrg(p["chave_id"], p["chave_publica"], seq,
+                                                   desde_em=p.get("cadastrada_em"))]
             self.eventos_chave[p["cnpj"]] = []
         elif tipo in ("chave_recuperacao_definida", "chave_rotacionada"):
             self._aplicar_evento_de_chave(tipo, p, seq)
@@ -260,8 +263,11 @@ class Plataforma:
         nome = "definição de chave de recuperação" if tipo == "chave_recuperacao_definida" \
             else "rotação de chave"
 
+        em = p.get("em") or p.get("definida_em")
+        em = em if isinstance(em, str) else None
+
         def anotar(valido: bool, motivo: str = "") -> None:
-            self.eventos_chave[cnpj].append(EventoChave(seq, nome, valido, motivo))
+            self.eventos_chave[cnpj].append(EventoChave(seq, nome, valido, motivo, em))
             return None
 
         try:
@@ -273,7 +279,8 @@ class Plataforma:
                                          f"principal vigente ({atual.chave_id})")
                 anotar(True)
                 self.recuperacao_org[cnpj] = {"chave_id": p["chave_id"],
-                                              "chave_publica": p["chave_publica"], "seq": seq}
+                                              "chave_publica": p["chave_publica"], "seq": seq,
+                                              "em": em}
                 return
             # rotação: assinada pela chave de RECUPERAÇÃO vigente
             if recuperacao is None:
@@ -289,10 +296,12 @@ class Plataforma:
             anotar(True)
             atual.ate_seq = seq
             nova = p["chave_nova"]
-            self.chaves_org[cnpj].append(ChaveOrg(nova["chave_id"], nova["chave_publica"], seq))
+            self.chaves_org[cnpj].append(ChaveOrg(nova["chave_id"], nova["chave_publica"], seq,
+                                                  desde_em=em))
             rec = p["recuperacao_nova"]
             self.recuperacao_org[cnpj] = {"chave_id": rec["chave_id"],
-                                          "chave_publica": rec["chave_publica"], "seq": seq}
+                                          "chave_publica": rec["chave_publica"], "seq": seq,
+                                          "em": em}
             # rascunhos à espera das chaves antigas não podem mais ser assinados
             antigas = {atual.chave_publica, recuperacao["chave_publica"]}
             for h in [h for h, r in self._rascunhos.items() if r.chave_publica in antigas]:
@@ -572,12 +581,14 @@ class Plataforma:
         recuperacao = self.recuperacao_org.get(org["cnpj"])
         return {
             "cadastro": org,
-            "chave_atual": {"chave_id": atual.chave_id, "chave_publica": atual.chave_publica},
+            "chave_atual": {"chave_id": atual.chave_id, "chave_publica": atual.chave_publica,
+                            "desde": atual.desde_em},
             "recuperacao": None if recuperacao is None else {
                 "chave_id": recuperacao["chave_id"],
-                "chave_publica": recuperacao["chave_publica"]},
+                "chave_publica": recuperacao["chave_publica"],
+                "definida_em": recuperacao["em"]},
             "historico_chaves": [{"seq": e.seq, "evento": e.tipo, "valido": e.valido,
-                                  "motivo": e.motivo}
+                                  "motivo": e.motivo, "em": e.em}
                                  for e in self.eventos_chave.get(org["cnpj"], [])],
         }
 

@@ -114,6 +114,21 @@ async function navegar() {
   const minha = ++navegacao;
   const logado = api.sessao() !== null;
   const caminho = location.hash.slice(1) || (logado ? "/aprovacoes" : "/entrar");
+  if (logado && caminho === "/cadastro") {
+    // já cadastrada: se faltar a recuperação (ex.: F5 no passo 2), retoma o passo
+    try {
+      const org = await api.obter("/organizacao");
+      if (minha !== navegacao) return;
+      if (!org.recuperacao) {
+        passo2DoCadastro(await pedirArmazenamentoPersistente(), true);
+        return;
+      }
+      location.hash = "#/aprovacoes";
+    } catch (erro) {
+      avisarErro(erro);
+    }
+    return;
+  }
   if (!ABERTAS.has(caminho) && !logado) {
     location.hash = "#/entrar";
     return;
@@ -129,7 +144,9 @@ async function navegar() {
     if (logado) {
       const [pendentes, org] = await Promise.all([
         api.obter("/ofertas?status=aguardando_aprovacao"), api.obter("/organizacao")]);
-      if (minha === navegacao) desenharTopo(caminho, pendentes.length, !org.recuperacao);
+      if (minha !== navegacao) return;
+      desenharTopo(caminho, pendentes.length, !org.recuperacao);
+      if (!org.recuperacao && caminho !== "/seguranca") conteudo.prepend(faixaSemRecuperacao());
     }
   } catch (erro) {
     if (minha !== navegacao) return;
@@ -189,6 +206,36 @@ async function telaEntrar() {
 }
 
 // ---------- cadastro da organização ----------
+
+/**
+ * Passo 2 do cadastro (arquivo de recuperação): sem menu, e sair pede
+ * confirmação. Também é retomado se a pessoa recarregar a página (F5) antes
+ * de terminar: a transportadora logada e sem recuperação volta a este passo.
+ */
+async function passo2DoCadastro(persistente, retomado = false) {
+  if (location.hash !== "#/cadastro") location.hash = "#/cadastro";
+  bloquearSaida({
+    hash: "#/cadastro",
+    titulo: "Sair sem guardar o arquivo de recuperação?",
+    corpo: ["A transportadora ainda não tem arquivo de recuperação. Sem ele, se você "
+      + "trocar de computador ou o navegador for limpo, perde o acesso à conta da "
+      + "transportadora.",
+    "Dá para criar depois, na aba Segurança, mas o melhor é terminar agora."],
+  });
+  desenharTopo("/cadastro", 0, true);
+  const registrado = await telaRecuperacaoDoCadastro(conteudo, { persistente, retomado });
+  if (passoObrigatorio === null) return; // a pessoa saiu antes de terminar
+  liberarSaida();
+  location.hash = registrado ? "#/agentes" : "#/seguranca";
+}
+
+/** Faixa em todas as telas enquanto a transportadora não tiver recuperação. */
+function faixaSemRecuperacao() {
+  return h("div", { class: "caixa alerta faixa-recuperacao", role: "alert" },
+    h("p", {}, h("strong", {}, "A transportadora ainda não tem arquivo de recuperação."),
+      " Se você trocar de computador ou o navegador for limpo, perde o acesso à conta."),
+    h("a", { class: "botao primario pequeno", href: "#/seguranca" }, "Criar agora"));
+}
 
 function avisoPerdaDeChave() {
   return h("div", { class: "caixa alerta" },
@@ -257,21 +304,7 @@ async function telaCadastro() {
         cadastrado = null; // deu certo: a chave fica
         const persistente = await pedirArmazenamentoPersistente();
         await api.entrar(registro);
-        avisar("Transportadora cadastrada. O acesso está guardado neste computador.");
-        // passo 2 obrigatório: sem menu, e sair pede confirmação
-        bloquearSaida({
-          hash: location.hash,
-          titulo: "Sair sem guardar o arquivo de recuperação?",
-          corpo: ["A transportadora ainda não tem arquivo de recuperação. Sem ele, se você "
-            + "trocar de computador ou o navegador for limpo, perde o acesso à conta da "
-            + "transportadora.",
-          "Dá para criar depois, na aba Segurança, mas o melhor é terminar agora."],
-        });
-        desenharTopo("/cadastro", 0, true);
-        const registrado = await telaRecuperacaoDoCadastro(conteudo, { persistente });
-        if (passoObrigatorio === null) return; // a pessoa saiu antes de terminar
-        liberarSaida();
-        location.hash = registrado ? "#/agentes" : "#/seguranca";
+        await passo2DoCadastro(persistente);
       } catch (erro) {
         if (cadastrado) await apagarChave(cadastrado).catch(() => {});
         avisarErro(erro);
@@ -407,7 +440,7 @@ async function telaAgentes() {
       + "que esse agente fala em nome dela."),
     campo("Nome", nome),
     campo("Identificador da chave", chaveId),
-    campo("Chave pública Ed25519", chavePublica),
+    campo("Chave pública do agente", chavePublica),
     h("div", { class: "acoes" }, botao));
   form.addEventListener("submit", (evento) => {
     evento.preventDefault();

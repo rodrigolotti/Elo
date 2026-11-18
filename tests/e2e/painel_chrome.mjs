@@ -130,6 +130,9 @@ class Pagina {
       this.problemas.push(`${msg.params.entry.source}: ${msg.params.entry.text} ${msg.params.entry.url ?? ""}`);
     } else if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") {
       this.problemas.push(`console.error: ${msg.params.args.map((a) => a.description ?? a.value).join(" ")}`);
+    } else if (msg.method === "Page.javascriptDialogOpening") {
+      this.dialogosNativos = (this.dialogosNativos ?? 0) + 1;
+      this.cdp("Page.handleJavaScriptDialog", { accept: true });
     } else if (msg.method === "Network.requestWillBeSent" && msg.params.request.postData) {
       this.corpos.push({ url: msg.params.request.url, corpo: msg.params.request.postData });
     }
@@ -364,38 +367,94 @@ async function roteiro() {
     falhar("depois do cadastro a sessão deveria estar aberta");
   }
   ok("organização cadastrada, sessão aberta");
-  const frase1 = await p.avaliar("document.querySelector('.frase-senha').textContent");
-  if (!/^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){4}$/.test(frase1)) falhar(`frase: ${frase1}`);
-  await p.aguardarTexto("Anote a frase-senha em papel e guarde separada do arquivo.");
+  const lerFrase = async () => {
+    const f = await p.avaliar("document.querySelector('.frase-senha').textContent");
+    if (!/^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){4}$/.test(f)) falhar(`frase: ${f}`);
+    return f;
+  };
+  const semMenu = async (quando) => {
+    if (await p.avaliar("!!document.querySelector('nav') || [...document.querySelectorAll('button')]"
+        + ".some((b) => b.textContent.trim() === 'Sair')")) {
+      falhar(`o menu ou o 'Sair' aparecem ${quando}`);
+    }
+  };
+  const fraseA = await lerFrase();
   await p.aguardarTexto("Sem isso, se você trocar de computador ou o navegador for limpo, "
     + "perde o acesso à conta da transportadora.");
+  await p.aguardarTexto("Anote a frase em papel e guarde longe do arquivo.");
   await p.aguardarTexto("Este navegador pode apagar seu acesso se faltar espaço");
-  await p.capturar("frase-senha");
-  ok("passo 2 explica o motivo; o alerta de espaço fica dentro do passo, sem cobrir botões");
 
-  // passo 2: sem menu, sem "Sair", e sair por outro caminho pede confirmação
-  if (await p.avaliar("!!document.querySelector('nav') || [...document.querySelectorAll('button')]"
-      + ".some((b) => b.textContent.trim() === 'Sair')")) {
-    falhar("o menu ou o 'Sair' aparecem durante o passo 2");
-  }
+  // 6: numa tela de notebook, as ações aparecem sem rolar; 7: uma caixa de aviso só
+  await p.cdp("Emulation.setDeviceMetricsOverride",
+    { width: 1280, height: 650, deviceScaleFactor: 1, mobile: false });
+  await esperar(200);
+  const abaixoDaDobra = await p.avaliar(`[...document.querySelectorAll(".passo-recuperacao button")]
+    .filter((b) => b.getBoundingClientRect().bottom > window.innerHeight)
+    .map((b) => b.textContent.trim())`);
+  if (abaixoDaDobra.length) falhar(`botões abaixo da dobra em 1280x650: ${abaixoDaDobra}`);
+  const caixas = await p.avaliar("document.querySelectorAll('main .caixa').length");
+  if (caixas !== 1) falhar(`o passo 2 tem ${caixas} caixas de aviso; deveria ter 1`);
+  await p.capturar("frase-senha-notebook");
+  await p.cdp("Emulation.setDeviceMetricsOverride",
+    { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  ok("passo 2: botões visíveis sem rolar em 1280x650 e uma caixa de aviso só, com o motivo");
+
+  // 4 e 9a: sem menu; sair pede confirmação; continuar volta o endereço para #/cadastro
+  await semMenu("durante o passo 2");
   await p.avaliar("location.hash = '#/agentes'");
   await p.aguardar("document.querySelector('dialog').open");
   await p.aguardarTexto("Sair sem guardar o arquivo de recuperação?");
   await p.capturar("sair-do-passo-2");
   await p.clicar("Continuar no passo", "document.querySelector('dialog')");
   await p.aguardar("!document.querySelector('dialog').open && location.hash === '#/cadastro'");
-  if (await p.avaliar("document.querySelector('.frase-senha')?.textContent") !== frase1) {
-    falhar("ao continuar no passo, a frase-senha mudou ou sumiu");
-  }
-  if (await p.avaliar("!!document.querySelector('nav')")) falhar("o menu voltou durante o passo 2");
-  ok("passo 2 sem menu; sair pede confirmação e 'Continuar no passo' mantém a mesma frase");
-  const arquivo1 = await guardarRecuperacao(p, DOWNLOADS1, frase1, true);
+  if (await lerFrase() !== fraseA) falhar("ao continuar no passo, a frase-senha mudou");
+  await semMenu("depois de 'Continuar no passo'");
+  ok("sair pede confirmação; 'Continuar no passo' volta o endereço para #/cadastro, mesma frase");
+
+  // 9b: F5 no passo 2 retoma o passo (com frase nova e aviso sobre o arquivo antigo)
+  await p.cdp("Page.reload");
+  await esperar(300);
+  await p.aguardar("document.readyState === 'complete' && document.querySelector('.frase-senha')",
+    15000);
+  const fraseB = await lerFrase();
+  if (fraseB === fraseA) falhar("depois do F5 o passo deveria gerar outra frase");
+  await p.aguardarTexto("Se você baixou um arquivo antes de recarregar a página, descarte-o");
+  await semMenu("depois do F5");
+  await p.capturar("passo-2-depois-do-f5");
+  ok("F5 no passo 2: o passo volta (frase nova, aviso para descartar arquivo antigo, sem menu)");
+  // no F5 o Chrome bloqueia a pergunta "sair da página?" porque, no roteiro, ninguém
+  // clicou de verdade (cliques sintéticos não contam como gesto); com uma pessoa, ela aparece
+  p.problemas = p.problemas.filter((x) => !(x.includes("beforeunload") && x.includes("user gesture")));
+
+  // quem sai mesmo assim vê, em toda tela, que está sem recuperação
+  await p.avaliar("location.hash = '#/agentes'");
+  await p.aguardar("document.querySelector('dialog').open");
+  await p.clicar("Sair mesmo assim", "document.querySelector('dialog')");
   await p.aguardar("location.hash === '#/agentes'");
-  await p.aguardar("document.querySelector('nav a[href=\"#/seguranca\"]')");
-  if (await p.avaliar("!!document.querySelector('nav a[href=\"#/seguranca\"] .contador')")) {
-    falhar("a aba Segurança não deveria acusar falta de recuperação");
+  await p.aguardarTexto("A transportadora ainda não tem arquivo de recuperação.");
+  await p.aguardar("document.querySelector('nav a[href=\"#/seguranca\"] .contador')");
+  await p.capturar("faixa-sem-recuperacao");
+  ok("saiu sem recuperação: faixa de alerta nas telas e '!' na aba Segurança");
+
+  // cria pela faixa, na aba Segurança (primeira vez: mensagem sem "arquivo anterior")
+  await p.clicar("Criar agora");
+  await p.aguardarTexto("Ainda não criado");
+  await p.clicar("Criar arquivo de recuperação");
+  await p.aguardar("document.querySelector('.frase-senha')", 15000);
+  const frase1 = await lerFrase();
+  const arquivo1 = await guardarRecuperacao(p, DOWNLOADS1, frase1, true);
+  await p.aguardarTexto("Arquivo de recuperação registrado. Guarde o arquivo e a frase em lugares separados.");
+  if (await p.avaliar("document.body.innerText.includes('anterior')")) {
+    falhar("na primeira chave de recuperação não pode falar em arquivo anterior");
   }
-  ok("frase mostrada, arquivo baixado; grupos errados não concluem, certos concluem; menu volta");
+  await p.aguardar("document.querySelector('nav a[href=\"#/seguranca\"]') && "
+    + "!document.querySelector('nav a[href=\"#/seguranca\"] .contador')");
+  await p.menu("/agentes");
+  await p.aguardarTexto("Novo agente");
+  if (await p.avaliar("!!document.querySelector('.faixa-recuperacao')")) {
+    falhar("a faixa de 'sem recuperação' continuou depois de criar o arquivo");
+  }
+  ok("arquivo criado pela aba Segurança: mensagem de primeira vez, faixa e '!' somem");
 
   const chave = await p.avaliar(`new Promise((ok, erro) => {
     const pedido = indexedDB.open("elo-painel");
@@ -538,7 +597,15 @@ async function roteiro() {
   ok("saiu (token encerrado) e entrou de novo assinando o desafio");
   await p.menu("/seguranca");
   await p.aguardarTexto("Histórico de acesso");
+  await p.aguardarTexto("Criado em");
+  const codigos = await p.avaliar(
+    "document.querySelector('main').innerText.match(/org-\\d+#|recuperacao-\\d+#|Registro nº|#\\d+\\b/g)");
+  if (codigos) falhar(`códigos técnicos à vista na aba Segurança: ${codigos}`);
   await p.capturar("seguranca");
+  await p.avaliar("document.querySelectorAll('details').forEach((d) => { d.open = true; })");
+  await p.aguardarTexto("Identificador do acesso");
+  await p.aguardarTexto("Registro nº");
+  ok("aba Segurança: datas em vez de códigos; códigos só em 'Ver detalhes técnicos'");
   await emitirMandatoPelaTela(p);
   const [{ mandato: { id: mandato2Id } }] = (await comToken(await tokenDa(p), "/mandatos"))
     .filter((m) => !m.revogado_em);

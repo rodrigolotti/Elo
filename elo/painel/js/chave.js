@@ -6,6 +6,7 @@ import { assinar, chavePublicaBase64, gerarParDeChaves } from "./assinatura.js";
 import { apagarChave, lerChave, pedirArmazenamentoPersistente, substituirChave } from "./cofre.js";
 import { conferirRascunho } from "./conferencia.js";
 import { anexar, h, limpar } from "./dom.js";
+import { emBrasilia } from "./formatos.js";
 import {
   abrirArquivoRecuperacao, criarArquivoRecuperacao, gerarFraseSenha, nomeDoArquivo,
 } from "./recuperacao.js";
@@ -14,6 +15,15 @@ import {
 } from "./ui.js";
 
 const hoje = () => new Date().toISOString().slice(0, 10);
+
+const criadoEm = (iso) => (iso ? `Criado em ${emBrasilia(iso)}` : "Criado");
+
+/** Códigos técnicos escondidos num "ver detalhes", para quem precisar conferir. */
+function detalhes(pares) {
+  return h("details", { class: "detalhes" },
+    h("summary", {}, "Ver detalhes técnicos"),
+    h("dl", { class: "dados" }, pares.filter(Boolean).map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])));
+}
 
 // nomes dos eventos de chave do protocolo, na linguagem da tela
 const EVENTOS_DE_ACESSO = {
@@ -43,7 +53,7 @@ function erroNaTela(texto) {
  * o arquivo e digitar dois grupos sorteados da frase. Sem acertar, não conclui.
  * Devolve { elemento, pronto } (pronto resolve com { chaveId, chavePublica }).
  */
-export function passoArquivoRecuperacao({ cnpj, persistente = true }) {
+export function passoArquivoRecuperacao({ cnpj, persistente = true, retomado = false }) {
   const elemento = h("section", { class: "cartao passo-recuperacao" },
     h("p", { class: "carregando" }, "Preparando o arquivo de recuperação…"));
   const pronto = (async () => {
@@ -68,23 +78,19 @@ export function passoArquivoRecuperacao({ cnpj, persistente = true }) {
         });
         continuar.addEventListener("click", pedirGrupos);
         anexar(limpar(elemento), [
-          h("h2", {}, "Arquivo de recuperação"),
           h("p", {}, h("strong", {}, "Sem isso, se você trocar de computador ou o navegador for "
             + "limpo, perde o acesso à conta da transportadora.")),
-          h("p", {}, "Com o arquivo de recuperação e esta frase-senha, você volta a entrar. "
-            + "A frase aparece só agora."),
-          persistente ? null : h("div", { class: "caixa alerta" },
-            h("p", {}, "Este navegador pode apagar seu acesso se faltar espaço no computador. "
-              + "Mais um motivo para guardar o arquivo e a frase.")),
           h("div", { class: "frase-senha", "aria-label": "Frase-senha" }, frase),
+          h("div", { class: "acoes acoes-frase" }, baixar, continuar),
           h("div", { class: "caixa alerta" },
-            h("p", {}, h("strong", {}, "Anote a frase-senha em papel e guarde separada do arquivo.")),
+            h("p", {}, h("strong", {}, "Anote a frase em papel e guarde longe do arquivo.")),
             h("ul", {},
-              h("li", {}, "Quem tiver o arquivo e a frase toma o controle da conta da transportadora."),
-              h("li", {}, "Sem a frase, o arquivo não abre. O Elo não guarda nenhum dos dois "
-                + "e não consegue recuperá-los."),
-              h("li", {}, "Não fotografe a frase nem a guarde no mesmo lugar do arquivo."))),
-          h("div", { class: "acoes" }, baixar, continuar)]);
+              h("li", {}, "Com os dois, você volta a entrar. Quem tiver os dois toma a conta."),
+              h("li", {}, "O Elo não guarda nenhum dos dois. A frase aparece só agora."),
+              persistente ? null : h("li", {}, "Este navegador pode apagar seu acesso se faltar "
+                + "espaço no computador."),
+              retomado ? h("li", {}, h("strong", {}, "Se você baixou um arquivo antes de "
+                + "recarregar a página, descarte-o: ele não vale. Use o desta tela.")) : null))]);
       }
 
       function pedirGrupos() {
@@ -146,12 +152,11 @@ async function registrarRecuperacao({ chaveId, chavePublica }) {
  * Passo 2 do cadastro: a transportadora acabou de entrar e ainda não tem
  * arquivo de recuperação. Resolve true se registrou, false se deu erro.
  */
-export async function telaRecuperacaoDoCadastro(conteudo, { persistente }) {
-  const passo = passoArquivoRecuperacao({ cnpj: api.sessao().cnpj, persistente });
+export async function telaRecuperacaoDoCadastro(conteudo, { persistente, retomado = false }) {
+  const passo = passoArquivoRecuperacao({ cnpj: api.sessao().cnpj, persistente, retomado });
   limpar(conteudo).append(h("section", {},
     cabecalho("Guarde o arquivo de recuperação",
-      "Passo 2 de 2. A transportadora já está cadastrada; falta o que permite voltar a "
-      + "entrar se este computador falhar."),
+      "Passo 2 de 2. A transportadora já está cadastrada; falta só isto."),
     passo.elemento));
   try {
     await registrarRecuperacao(await passo.pronto);
@@ -209,20 +214,28 @@ export async function telaSeguranca() {
       h("article", { class: "cartao" },
         h("h2", {}, "Acesso"),
         h("dl", { class: "dados" },
-          h("dt", {}, "Acesso deste computador"), h("dd", {}, mono(atual.chave_id)),
+          h("dt", {}, "Acesso deste computador"), h("dd", {}, criadoEm(atual.desde)),
           h("dt", {}, "Arquivo de recuperação"),
-          h("dd", {}, recuperacao ? mono(recuperacao.chave_id) : "não criado")),
+          h("dd", {}, recuperacao ? criadoEm(recuperacao.definida_em) : "Ainda não criado")),
+        detalhes([
+          ["Identificador do acesso", mono(atual.chave_id)],
+          recuperacao ? ["Identificador do arquivo de recuperação", mono(recuperacao.chave_id)] : null,
+        ]),
         h("div", { class: "acoes" }, gerar)),
       area,
       h("article", { class: "cartao" },
         h("h2", {}, "Histórico de acesso"),
         historico.length === 0 ? h("p", { class: "ajuda" }, "Acesso original, sem mudanças.")
-          : h("table", {},
-            h("thead", {}, h("tr", {}, ["Evento", "Registro", "Situação"].map((t) => h("th", {}, t)))),
+          : [h("table", {},
+            h("thead", {}, h("tr", {}, ["Quando", "O que aconteceu", "Situação"]
+              .map((t) => h("th", {}, t)))),
             h("tbody", {}, historico.map((e) => h("tr", {},
-              h("td", {}, EVENTOS_DE_ACESSO[e.evento] ?? e.evento), h("td", {}, mono(`#${e.seq}`)),
+              h("td", {}, e.em ? emBrasilia(e.em) : "—"),
+              h("td", {}, EVENTOS_DE_ACESSO[e.evento] ?? e.evento),
               h("td", { class: e.valido ? "ok" : "falha" },
-                e.valido ? "OK" : `FALHA: ${e.motivo}`)))))))]);
+                e.valido ? "Confirmado" : "Com problema"))))),
+            detalhes(historico.map((e) => [`Registro nº ${e.seq}`,
+              `${e.evento}: ${e.valido ? "assinatura conferida" : e.motivo}`]))]))]);
   return secao;
 }
 

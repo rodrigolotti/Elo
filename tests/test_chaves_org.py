@@ -294,3 +294,17 @@ def test_pagina_publica_mostra_a_15a_checagem(api):
     cp_id = aceitar(api, emitida["oferta"]["id"]).json()["id"]
     texto = api["cliente"].get(f"/verificar/{cp_id}").text
     assert HISTORICO in texto and "15 de 15 checagens OK" in texto
+
+
+def test_resumo_traz_as_datas_de_cada_acesso(com_recuperacao):
+    p, relogio = com_recuperacao["plataforma"], com_recuperacao["relogio"]
+    resumo = p.resumo_organizacao(CNPJ_TRANSP)
+    assert resumo["chave_atual"]["desde"] == "2026-11-17T09:00:00-03:00"
+    assert resumo["recuperacao"]["definida_em"] == "2026-11-17T09:00:00-03:00"
+    relogio.avancar(hours=5)
+    rotacionar(com_recuperacao)
+    resumo = p.resumo_organizacao(CNPJ_TRANSP)
+    assert resumo["chave_atual"]["desde"] == "2026-11-17T14:00:00-03:00"
+    assert resumo["recuperacao"]["definida_em"] == "2026-11-17T14:00:00-03:00"
+    assert [h["em"] for h in resumo["historico_chaves"]] == [
+        "2026-11-17T09:00:00-03:00", "2026-11-17T14:00:00-03:00"]
