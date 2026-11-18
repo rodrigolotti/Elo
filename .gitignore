@@ -3,3 +3,13 @@ __pycache__/
 .pytest_cache/
 *.db
 .venv/
+
+# chaves e segredos: nunca versionar
+*.key
+*.pem
+*.p12
+*.pfx
+.env
+.env.*
+chaves/
+chaves_locais/
