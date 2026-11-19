@@ -2,7 +2,7 @@
 
 import * as api from "./api.js";
 import { h } from "./dom.js";
-import { reais } from "./formatos.js";
+import { contar, reais } from "./formatos.js";
 import { motivosOrdenados } from "./motivos.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
@@ -42,7 +42,7 @@ export async function telaVisaoGeral() {
     ? h("p", { class: "vg-vazio" }, "Nenhum frete fechado ainda neste mês.")
     : v.embarcadores.map((e) => h("div", { class: "vg-linha vg-embarcadores" },
       h("span", { class: "vg-quem" }, h("span", { class: "vg-rota" }, e.nome ?? e.cnpj)),
-      h("span", { class: "vg-valor" }, `${e.fretes} frete${e.fretes > 1 ? "s" : ""}`),
+      h("span", { class: "vg-valor" }, contar(e.fretes, "frete", "fretes")),
       h("span", { class: "vg-total" }, reais(e.total_centavos))));
 
   return h("section", { class: "visao-geral" },
@@ -52,7 +52,8 @@ export async function telaVisaoGeral() {
     h("div", { class: "vg-numeros" },
       numero("Fretes fechados no mês", reais(fechados.total_centavos),
         fechados.quantidade === 0 ? "Nenhum frete fechado ainda neste mês."
-          : `${fechados.quantidade} frete${fechados.quantidade > 1 ? "s" : ""}, todos com prova verificável`),
+          : `${contar(fechados.quantidade, "frete", "fretes")}, `
+            + (fechados.quantidade === 1 ? "com prova verificável" : "todos com prova verificável")),
       numero("Aguardando sua decisão", String(aguardando.quantidade),
         `${reais(aguardando.total_centavos)} em ofertas`, aguardando.quantidade ? "atencao" : ""),
       numero("Fretes barrados abaixo do piso", String(barradas.quantidade),

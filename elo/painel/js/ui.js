@@ -8,9 +8,25 @@ const dialogo = document.getElementById("dialogo");
 
 // ---------- avisos e diálogos ----------
 
+const prazos = new WeakMap(); // aviso -> timer que o remove
+
 export function avisar(texto, tipo = "ok") {
-  const aviso = h("div", { class: `aviso aviso-${tipo}`, role: tipo === "erro" ? "alert" : "status" },
-    h("span", {}, texto),
+  const duracao = tipo === "ok" ? 5000 : 10000;
+  // a mesma mensagem de novo não empilha: o aviso que já está na tela ganha a
+  // contagem ("2 vezes") e o prazo para sumir recomeça
+  const igual = [...avisos.children].find((a) => a.dataset.texto === texto && a.dataset.tipo === tipo);
+  if (igual) {
+    const vezes = Number(igual.dataset.vezes) + 1;
+    igual.dataset.vezes = String(vezes);
+    igual.querySelector(".vezes").textContent = ` (${vezes} vezes)`;
+    clearTimeout(prazos.get(igual));
+    prazos.set(igual, setTimeout(() => igual.remove(), duracao));
+    avisos.append(igual); // a mais recente fica embaixo
+    return;
+  }
+  const aviso = h("div", { class: `aviso aviso-${tipo}`, role: tipo === "erro" ? "alert" : "status",
+                           "data-texto": texto, "data-tipo": tipo, "data-vezes": "1" },
+    h("span", {}, texto, h("span", { class: "vezes" })),
     h("button", { class: "fechar", type: "button", "aria-label": "Fechar",
                   onclick: () => aviso.remove() }, "×"));
   avisos.append(aviso);
@@ -18,7 +34,7 @@ export function avisar(texto, tipo = "ok") {
   // a faixa de avisos fica no fluxo da página (empurra o conteúdo, nunca cobre
   // um botão); se ela estiver fora da tela, rola até ela
   if (avisos.getBoundingClientRect().bottom < 0) avisos.scrollIntoView({ behavior: "smooth" });
-  setTimeout(() => aviso.remove(), tipo === "ok" ? 5000 : 10000);
+  prazos.set(aviso, setTimeout(() => aviso.remove(), duracao));
 }
 
 export function avisarErro(erro) {

@@ -6,7 +6,7 @@ import { assinar, chavePublicaBase64, gerarParDeChaves } from "./assinatura.js";
 import { apagarChave, lerChave, pedirArmazenamentoPersistente, substituirChave } from "./cofre.js";
 import { conferirRascunho } from "./conferencia.js";
 import { anexar, h, limpar } from "./dom.js";
-import { emBrasilia } from "./formatos.js";
+import { contar, emBrasilia } from "./formatos.js";
 import {
   abrirArquivoRecuperacao, criarArquivoRecuperacao, gerarFraseSenha, nomeDoArquivo,
 } from "./recuperacao.js";
@@ -367,7 +367,8 @@ function continuarRecuperacao(conteudo, aberto) {
         let revogados = 0;
         if (revogar.checked) revogados = await revogarMandatosAtivos();
         avisar("Acesso recuperado. O acesso antigo não funciona mais."
-          + (revogar.checked ? ` ${revogados} mandato(s) revogado(s).` : ""));
+          + (!revogar.checked ? "" : revogados === 0 ? " Nenhum mandato ativo para revogar."
+            : ` ${contar(revogados, "mandato revogado", "mandatos revogados")}.`));
         location.hash = "#/mandatos";
       } catch (e) {
         if (gravouNova) {

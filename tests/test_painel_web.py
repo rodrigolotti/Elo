@@ -316,3 +316,16 @@ def test_motivo_sem_rotulo_curto_vira_frase_sem_data_crua(navegador):
                ["origem RJ fora das UFs autorizadas", "mandato venceu em 2026-11-01T00:00:00-03:00"],
                None)
     assert [m["texto"] for m in r] == ["Mandato vencido", "Origem RJ fora das UFs autorizadas"]
+
+
+@pytest.mark.parametrize("n, esperado", [(0, "0 mandatos revogados"), (1, "1 mandato revogado"),
+                                         (2, "2 mandatos revogados"), (1200, "1.200 mandatos revogados")])
+def test_plural(navegador, n, esperado):
+    assert chamar(navegador, "formatos.js", "contar", n, "mandato revogado", "mandatos revogados") == esperado
+
+
+@pytest.mark.parametrize("arquivo", ARQUIVOS_JS, ids=lambda p: p.name)
+def test_sem_plural_com_parenteses(arquivo):
+    # "mandato(s) revogado(s)." (plural de texto), não "texto(s) {" (chamada de função)
+    assert not re.search(r"[a-zà-ú]\(s\) [a-zà-ú]", arquivo.read_text(encoding="utf-8")), \
+        f"{arquivo.name}: use contar(n, singular, plural)"

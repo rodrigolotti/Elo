@@ -103,6 +103,11 @@ export function rota(carga) {
   return `${carga.origem_uf} (${carga.origem_cep}) → ${carga.destino_uf} (${carga.destino_cep})`;
 }
 
+/** contar(1, "mandato revogado", "mandatos revogados") -> "1 mandato revogado". */
+export function contar(n, singular, plural) {
+  return `${numero(n)} ${n === 1 ? singular : plural}`;
+}
+
 export function soDigitos(texto) {
   return String(texto).replace(/\D/g, "");
 }

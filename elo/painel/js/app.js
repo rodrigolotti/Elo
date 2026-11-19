@@ -21,7 +21,7 @@ import {
   FATOR_CUBAGEM_KG_POR_M3, TIPOS_CARGA, UFS, centavosDeReais, chavePublicaValida, dataBr,
   datasEmBrasilia, emBrasilia,
   isoDeBrasilia, localDeBrasilia, metrosCubicos, numero, pesoCubadoKg, prazoAte, reais,
-  resumoFrete, rota, soDigitos,
+  resumoFrete, rota, soDigitos, contar,
 } from "./formatos.js";
 
 const topo = document.getElementById("topo");
@@ -120,9 +120,11 @@ async function simularPedido(botao) {
       }
       const r = await api.enviar("/demo/simular", {});
       const aguardando = r.ofertas.filter((o) => o.status === "aguardando_aprovacao").length;
-      avisar(`Pedido simulado de ${r.embarcador.nome}: ${r.ofertas.length} ofertas. `
-        + `${r.ofertas.length - aguardando} foi direto ao embarcador e ${aguardando} aguardam `
-        + "a sua decisão.");
+      const diretas = r.ofertas.length - aguardando;
+      avisar(`Pedido simulado de ${r.embarcador.nome}: `
+        + `${contar(r.ofertas.length, "oferta", "ofertas")}. `
+        + `${contar(diretas, "foi direto", "foram direto")} ao embarcador e `
+        + `${contar(aguardando, "aguarda", "aguardam")} a sua decisão.`);
       if (location.hash === "#/aprovacoes") recarregar();
       else location.hash = "#/aprovacoes";
     } catch (erro) {
@@ -412,7 +414,7 @@ function campoResponsavel() {
 function blocoEmbarcador(embarcador) {
   const n = embarcador.fretes_fechados;
   const historico = n === 0 ? "Primeiro frete com este embarcador"
-    : `${n} frete${n > 1 ? "s" : ""} já fechado${n > 1 ? "s" : ""} com ele`;
+    : `${contar(n, "frete já fechado", "fretes já fechados")} com ele`;
   return h("div", {},
     h("div", {}, embarcador.nome ?? "Nome não informado no pedido"),
     h("div", { class: "ajuda" }, mono(embarcador.cnpj), ` · ${historico}`));

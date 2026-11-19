@@ -867,6 +867,7 @@ async function roteiro() {
   await p2.aguardar("location.hash === '#/mandatos'", 20000);
   await p2.aguardar("document.querySelectorAll('.etiqueta').length === 2 && "
     + "[...document.querySelectorAll('.etiqueta')].every((e) => e.textContent === 'Revogado')");
+  await p2.aguardarTexto("Acesso recuperado. O acesso antigo não funciona mais. 1 mandato revogado.");
   await p2.capturar("recuperado-mandatos-revogados");
   ok("chave trocada; 'revogar mandatos' veio marcado e os 2 mandatos estão revogados");
 
@@ -932,6 +933,12 @@ async function roteiro() {
   await p2.clicar("Simular pedido de cotação");
   await p2.aguardar(`document.querySelectorAll('article.cartao').length === ${cartoesAntes + 2}`, 20000);
   if (await p2.avaliar("document.querySelector('dialog').open")) falhar("pediu para preparar de novo");
+  // a mesma mensagem duas vezes vira um aviso só, com a contagem
+  const avisosDemo = await p2.avaliar(`[...document.querySelectorAll("#avisos .aviso")]
+    .filter((a) => a.textContent.includes("Pedido simulado")).map((a) => a.textContent)`);
+  if (avisosDemo.length !== 1 || !avisosDemo[0].includes("(2 vezes)")) {
+    falhar(`avisos repetidos não foram juntados: ${JSON.stringify(avisosDemo)}`);
+  }
   ok("demonstração: prepara uma vez (assinando no navegador) e simula 3 ofertas por pedido");
   await percorrerTelas(p2, 1280, 900, "desktop");
   ok("desktop (1280 px): topo numa linha, menu numa linha, botão de demonstração, sem rolagem lateral");
