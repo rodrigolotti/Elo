@@ -819,7 +819,14 @@ async function roteiro() {
   await p.aguardar("document.querySelector('dialog').open");
   await p.aguardarTexto("Justificativa (obrigatória: frete abaixo do piso da ANTT)");
   await p.preencher("dialog input", "Ana Gestora");
-  await p.clicar("Aprovar oferta", "document.querySelector('dialog')");
+  const confirmarPiso = await p.avaliar(`(() => {
+    const b = [...document.querySelectorAll("dialog button")].find((x) => x.type === "submit");
+    return { texto: b.textContent, fundo: getComputedStyle(b).backgroundColor };
+  })()`);
+  if (confirmarPiso.texto !== "Aprovar abaixo do piso" || confirmarPiso.fundo !== "rgb(185, 28, 28)") {
+    falhar(`botão de aprovar abaixo do piso deveria ser vermelho: ${JSON.stringify(confirmarPiso)}`);
+  }
+  await p.clicar("Aprovar abaixo do piso", "document.querySelector('dialog')");
   await esperar(300);
   if (!(await p.avaliar("document.querySelector('dialog').open"))) {
     falhar("aprovou abaixo do piso sem justificativa");
@@ -827,14 +834,14 @@ async function roteiro() {
   const justificativa = "Cliente estratégico; diferença coberta pelo contrato anual.";
   await p.preencher("dialog textarea[name=justificativa]", justificativa);
   await p.capturar("justificativa-abaixo-do-piso");
-  await p.clicar("Aprovar oferta", "document.querySelector('dialog')");
+  await p.clicar("Aprovar abaixo do piso", "document.querySelector('dialog')");
   await p.aguardarTexto("Frete de R$ 1.000,00 (SP → PR) aprovado e enviado ao embarcador.");
   const aprovada = (await comToken(await tokenDa(p), "/ofertas"))
     .find((o) => o.oferta.id === depois.oferta.id);
   if (aprovada.aprovacao?.justificativa !== justificativa || !aprovada.aprovacao?.assinatura) {
     falhar(`justificativa não gravada na aprovação: ${JSON.stringify(aprovada.aprovacao)}`);
   }
-  ok("aprovar abaixo do piso: sem justificativa o diálogo não fecha; com ela, vai assinada");
+  ok("aprovar abaixo do piso: botão vermelho 'Aprovar abaixo do piso'; sem justificativa não fecha; com ela, vai assinada");
   await p.menu("/seguranca");
   await p.aguardarTexto("Histórico de acesso");
   await p.aguardarTexto("Criado em");

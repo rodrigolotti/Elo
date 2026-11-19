@@ -552,7 +552,9 @@ function cartaoOferta(item, agentes) {
                 + "justificativa; ela fica registrada e assinada junto com a aprovação.") : null,
               "Depois disso o embarcador pode aceitá-la pelo link enviado pelo agente."]
         .filter(Boolean),
-      botao: "Aprovar oferta",
+      // abaixo do piso: o botão diz o risco e fica vermelho, como as ações perigosas
+      botao: abaixoDoPiso ? "Aprovar abaixo do piso" : "Aprovar oferta",
+      perigo: abaixoDoPiso,
       campos: [responsavel.rotulo,
         abaixoDoPiso ? campo("Justificativa (obrigatória: frete abaixo do piso da ANTT)",
           justificativa, `Pelo menos ${MINIMO_JUSTIFICATIVA} caracteres.`) : null].filter(Boolean),
