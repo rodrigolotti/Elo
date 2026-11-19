@@ -339,7 +339,8 @@ async function roteiro() {
   console.log(`API em ${BASE}; capturas em ${CAPTURAS}`);
   subir(process.env.PYTHON ?? "python", ["-m", "uvicorn", "elo.api:app", "--port",
     String(PORTA_API)], { env: { ...process.env, ELO_DB: join(temporario, "elo.db"),
-                                 ELO_ESTIMATIVA_CEP: "desligada" } });  // sem rede
+                                 ELO_ESTIMATIVA_CEP: "desligada",  // sem rede
+                                 ELO_DEMO: "ligado" } });
   await aguardarUrl(`${BASE}/openapi.json`);
   if (!CHROME) falhar("Chrome/Edge não encontrado: defina CHROME");
   subir(CHROME, ["--headless=new", `--remote-debugging-port=${PORTA_CDP}`,
@@ -764,7 +765,28 @@ async function roteiro() {
   p.problemas = p.problemas.filter((x) => !(x.includes("status of 401") && x.includes("/sessoes")));
   ok("no primeiro computador, a chave antiga é recusada com mensagem clara");
 
-  console.log("12. Conferências finais");
+  console.log("12. Modo demonstração");
+  const botaoDemo = "[...document.querySelectorAll('button')].find((b) => "
+    + "b.textContent.trim() === 'Simular pedido de cotação')";
+  await p2.aguardar(botaoDemo);
+  await p2.clicar("Simular pedido de cotação");
+  await p2.aguardar("document.querySelector('dialog').open");
+  await p2.aguardarTexto("Preparar demonstração");
+  await p2.capturar("preparar-demonstracao");
+  await p2.clicar("Assinar e preparar", "document.querySelector('dialog')");
+  await p2.aguardarTexto("Pedido simulado de Comercial Exemplo de Alimentos Ltda (fictícia): 3 ofertas. "
+    + "1 foi direto ao embarcador e 2 aguardam a sua decisão.", 20000);
+  await p2.aguardar("location.hash === '#/aprovacoes'");
+  await p2.aguardarTexto("Valor R$ 9.000,00 acima do limite de R$ 6.000,00");
+  await p2.aguardarTexto("R$ 1.857,20 abaixo do piso mínimo da ANTT: risco de multa e indenização.");
+  await p2.capturar("demonstracao-aprovacoes");
+  const cartoesAntes = await p2.avaliar("document.querySelectorAll('article.cartao').length");
+  await p2.clicar("Simular pedido de cotação");
+  await p2.aguardar(`document.querySelectorAll('article.cartao').length === ${cartoesAntes + 2}`, 20000);
+  if (await p2.avaliar("document.querySelector('dialog').open")) falhar("pediu para preparar de novo");
+  ok("demonstração: prepara uma vez (assinando no navegador) e simula 3 ofertas por pedido");
+
+  console.log("13. Conferências finais");
   const corpos = [...p.corpos, ...p2.corpos];
   const comPrivada = corpos.filter(({ corpo }) =>
     /privad|private|pkcs8|"d"\s*:|"jwk"|"cifra"|"kdf"/i.test(corpo));

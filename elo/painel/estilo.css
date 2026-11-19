@@ -220,3 +220,6 @@ td.ok { color: #15803d; font-weight: 700; }
 .confirmacao .ajuda { display: block; font-weight: 400; margin-top: 4px; }
 section > .cartao + .cartao, .passo-recuperacao + .cartao { margin-top: 16px; }
 td.falha { color: var(--ruim); font-weight: 700; }
+
+/* botão de demonstração: só no desktop */
+@media (max-width: 640px) { .so-desktop { display: none !important; } }

@@ -74,7 +74,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 377 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 382 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -364,6 +364,26 @@ python -m pytest -q tests\test_antt.py
 `python scripts\extrair_tabela_antt.py <arquivo>`. Depois acrescente uma
 `TabelaPiso` nova em `elo/antt.py`, com norma, publicação, vigência, URL e SHA-256. A
 tabela antiga continua valendo para ofertas emitidas antes.
+
+### Modo demonstração
+
+Para apresentar o Elo a uma transportadora, suba a API com `ELO_DEMO=ligado`:
+
+```bat
+set ELO_DEMO=ligado
+uvicorn elo.api:app
+```
+
+O painel ganha, só no desktop, o botão **"Simular pedido de cotação"**. Na primeira vez,
+ele pede para **preparar a demonstração**: a transportadora assina, no próprio navegador,
+o cadastro do **Agente de demonstração** (que roda no servidor, com a chave só na
+memória) e um mandato padrão (SP → PR, carga geral, até R$ 6.000,00 por frete, 30 dias).
+O servidor nunca assina pela organização. Depois, cada clique registra o pedido de um
+embarcador fictício e três ofertas de lotação (410 km, 5 eixos): uma dentro do mandato,
+uma acima do limite e uma abaixo do piso da ANTT.
+
+Com o modo desligado (o padrão), as rotas `/demo/*` e o botão **não existem**: um teste
+confere isso. Não ligue esse modo num servidor de uso real.
 
 ### Verificação num Chrome de verdade
 

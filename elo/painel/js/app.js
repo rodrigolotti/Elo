@@ -57,6 +57,76 @@ window.addEventListener("beforeunload", (evento) => {
   }
 });
 
+// ---------- modo demonstração (só aparece se o servidor estiver com ELO_DEMO=ligado) ----------
+
+let demo; // undefined: ainda não consultado; null: modo desligado
+
+async function consultarDemo() {
+  if (demo !== undefined) return demo;
+  try {
+    demo = await api.obter("/demo/agente");
+  } catch {
+    demo = null;
+  }
+  return demo;
+}
+
+function mandatoAtivo(item) {
+  const agora = new Date();
+  const l = item.mandato.limites;
+  return !item.revogado_em && new Date(l.valido_de) <= agora && agora <= new Date(l.valido_ate);
+}
+
+/** Prepara (se preciso) e simula um pedido de cotação com o agente de demonstração. */
+async function simularPedido(botao) {
+  await executando(botao, async () => {
+    try {
+      const { cnpj } = api.sessao();
+      let agente = (await api.obter("/agentes")).find((a) => a.chave_publica === demo.chave_publica);
+      const preparado = agente && (await api.obter("/mandatos"))
+        .some((m) => m.mandato.agente_id === agente.agente_id && mandatoAtivo(m));
+      if (!preparado) {
+        const l = demo.limites_padrao;
+        const ok = await confirmar({
+          titulo: "Preparar demonstração",
+          corpo: ["Para simular pedidos, a transportadora autoriza o agente de demonstração, "
+            + "que roda no servidor só neste modo.",
+          `Você vai assinar o cadastro do ${demo.nome} e um mandato: ${l.ufs_origem.join(", ")} → `
+            + `${l.ufs_destino.join(", ")}, carga geral, até ${reais(l.valor_max_centavos)} por `
+            + "frete, por 30 dias."],
+          botao: "Assinar e preparar",
+        });
+        if (!ok) return;
+        if (!agente) {
+          const corpo = { cnpj, nome: demo.nome, chave_id: demo.chave_id,
+                          chave_publica: demo.chave_publica };
+          agente = await api.assinarEEnviar({
+            rotaRascunho: "/agentes/rascunho", corpo, rotaEnvio: "/agentes",
+            esperado: { tipo: "certificado_agente", ...corpo },
+          });
+        }
+        const agora = new Date();
+        const limites = { ...l, valido_de: isoDeBrasilia(localDeBrasilia(agora)),
+                          valido_ate: isoDeBrasilia(localDeBrasilia(new Date(agora.getTime() + 30 * 864e5))) };
+        await api.assinarEEnviar({
+          rotaRascunho: "/mandatos/rascunho",
+          corpo: { cnpj, agente_id: agente.agente_id, limites }, rotaEnvio: "/mandatos",
+          esperado: { tipo: "mandato", cnpj, agente_id: agente.agente_id, limites },
+        });
+      }
+      const r = await api.enviar("/demo/simular", {});
+      const aguardando = r.ofertas.filter((o) => o.status === "aguardando_aprovacao").length;
+      avisar(`Pedido simulado de ${r.embarcador.nome}: ${r.ofertas.length} ofertas. `
+        + `${r.ofertas.length - aguardando} foi direto ao embarcador e ${aguardando} aguardam `
+        + "a sua decisão.");
+      if (location.hash === "#/aprovacoes") recarregar();
+      else location.hash = "#/aprovacoes";
+    } catch (erro) {
+      avisarErro(erro);
+    }
+  });
+}
+
 function desenharTopo(caminho, pendentes, semRecuperacao) {
   const atual = api.sessao();
   const emPasso = passoObrigatorio !== null;
@@ -74,6 +144,10 @@ function desenharTopo(caminho, pendentes, semRecuperacao) {
       alvo === "/seguranca" && semRecuperacao
         ? h("span", { class: "contador", title: "Sem arquivo de recuperação" }, "!") : null)))
       : null,
+    atual && !emPasso && demo ? h("button", {
+      type: "button", class: "botao secundario pequeno so-desktop",
+      onclick: (e) => simularPedido(e.currentTarget),
+    }, "Simular pedido de cotação") : null,
     atual && !emPasso ? h("div", { class: "quem" },
       h("span", { class: "quem-nome" }, atual.razaoSocial),
       h("span", { class: "quem-cnpj mono" }, atual.cnpj),
@@ -145,7 +219,8 @@ async function navegar() {
     conteudo.querySelector("h1")?.focus();
     if (logado) {
       const [pendentes, org] = await Promise.all([
-        api.obter("/ofertas?status=aguardando_aprovacao"), api.obter("/organizacao")]);
+        api.obter("/ofertas?status=aguardando_aprovacao"), api.obter("/organizacao"),
+        consultarDemo()]);
       if (minha !== navegacao) return;
       desenharTopo(caminho, pendentes.length, !org.recuperacao);
       if (!org.recuperacao && caminho !== "/seguranca") conteudo.prepend(faixaSemRecuperacao());

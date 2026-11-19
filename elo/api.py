@@ -255,7 +255,8 @@ def _frete(item: dict[str, Any], estimador: Any) -> dict[str, Any]:
     return frete
 
 
-def criar_app(plataforma: Plataforma | None = None, estimador: Any = None) -> FastAPI:
+def criar_app(plataforma: Plataforma | None = None, estimador: Any = None,
+              demo: bool | None = None) -> FastAPI:
     """Cria a API. Sem plataforma, abre o banco de ELO_DB ao iniciar."""
 
     @asynccontextmanager
@@ -277,6 +278,8 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None) -> Fa
     )
     app.state.plataforma = plataforma
     app.state.estimador = estimador if estimador is not None else _estimador_padrao()
+    if demo is None:
+        demo = os.environ.get("ELO_DEMO", "").lower() == "ligado"
     sessoes = app.state.sessoes = Sessoes(lambda: app.state.plataforma)
     # a Plataforma mantém estado em memória e uma conexão SQLite: uma
     # requisição por vez
@@ -311,6 +314,23 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None) -> Fa
 
     def plat() -> Plataforma:
         return app.state.plataforma
+
+    # ----- modo demonstração (só existe com ELO_DEMO=ligado) -----
+
+    if demo:
+        from .demo import AgenteDemo
+        agente_demo = app.state.agente_demo = AgenteDemo()
+
+        @app.get("/demo/agente", tags=["demonstração"])
+        def agente_de_demonstracao() -> dict[str, Any]:
+            """Chave pública do agente simulado, para o painel assinar o certificado."""
+            return agente_demo.descricao()
+
+        @app.post("/demo/simular", tags=["demonstração"])
+        def simular_pedido(cnpj: Logado) -> dict[str, Any]:
+            """Pedido de um embarcador fictício e três ofertas do agente simulado."""
+            with trava:
+                return agente_demo.simular(plat(), cnpj)
 
     # ----- sessão do painel -----
 
