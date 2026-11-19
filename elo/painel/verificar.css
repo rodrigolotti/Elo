@@ -61,6 +61,8 @@ h2 { font-size: 1.1rem; margin: 36px 0 12px; }
 .qr img { display: block; width: 168px; height: 168px; margin: 0 auto; }
 .qr p { color: var(--suave); font-size: .8rem; margin: 6px 0 0; }
 .qr .endereco { font-family: ui-monospace, Consolas, monospace; font-size: .7rem; word-break: break-all; }
+.aviso-local { color: #78350f; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+  font-size: .72rem; padding: 4px 6px; margin-top: 8px; }
 .imprimir {
   font: inherit; font-weight: 600; margin-top: 12px; padding: 8px 16px; border-radius: 10px;
   border: 1px solid var(--borda); background: #fff; color: var(--marca); cursor: pointer;

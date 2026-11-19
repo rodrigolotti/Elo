@@ -686,6 +686,10 @@ async function roteiro() {
     css: getComputedStyle(document.querySelector(".topo")).display,
     fonte: getComputedStyle(document.body).fontFamily })`);
   if (!qr.largura || qr.endereco !== qr.aqui) falhar(`QR Code: ${JSON.stringify(qr)}`);
+  // o roteiro roda em 127.0.0.1: a página tem de avisar que o QR só abre aqui
+  if (!(await p.avaliar("document.querySelector('.aviso-local')?.textContent.includes('só abre neste computador')"))) {
+    falhar("sem o aviso de endereço local embaixo do QR Code");
+  }
   if (qr.css !== "grid" || !qr.fonte.startsWith('"Inter"') && !qr.fonte.startsWith("Inter")) {
     falhar(`estilo da página de verificação não carregou (CSP?): ${JSON.stringify(qr)}`);
   }

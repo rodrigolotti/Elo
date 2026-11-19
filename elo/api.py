@@ -263,6 +263,7 @@ def _frete(item: dict[str, Any], estimador: Any) -> dict[str, Any]:
 def criar_app(plataforma: Plataforma | None = None, estimador: Any = None,
               demo: bool | None = None) -> FastAPI:
     """Cria a API. Sem plataforma, abre o banco de ELO_DB ao iniciar."""
+    url_publica_configurada()  # ELO_URL_PUBLICA errada: falha ao subir, não no QR
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
@@ -706,12 +707,33 @@ CABECALHOS_VERIFICACAO = {
 }
 
 
+_URL_PUBLICA_VALIDA = re.compile(r"https?://[^/\s?#]+(/[^\s?#]*)?")
+_HOSTS_LOCAIS = re.compile(r"^(localhost|127(\.\d{1,3}){3}|0\.0\.0\.0|\[::1?\])(:\d+)?$", re.I)
+
+
+def url_publica_configurada() -> str | None:
+    """ELO_URL_PUBLICA, conferida: http(s)://host[:porta][/caminho], sem ? nem #."""
+    valor = os.environ.get("ELO_URL_PUBLICA", "").strip()
+    if not valor:
+        return None
+    if not _URL_PUBLICA_VALIDA.fullmatch(valor):
+        raise ValueError(f"ELO_URL_PUBLICA inválida: {valor!r}. Use algo como "
+                         "https://elo.suaempresa.com.br ou http://192.168.0.15:8000")
+    return valor.rstrip("/")
+
+
 def _endereco_publico(request: Request, compromisso_id: str) -> str:
     """Endereço desta página para o QR Code. Em produção, ELO_URL_PUBLICA fixa o
     domínio (ex.: https://elo.exemplo.com.br); sem ela, vale o endereço pelo qual
     a página foi pedida."""
-    base = os.environ.get("ELO_URL_PUBLICA") or str(request.base_url)
-    return f"{base.rstrip('/')}/verificar/{compromisso_id}"
+    base = url_publica_configurada() or str(request.base_url).rstrip("/")
+    return f"{base}/verificar/{compromisso_id}"
+
+
+def endereco_so_local(endereco: str) -> bool:
+    """O endereço só abre neste computador (localhost, 127.x, 0.0.0.0, ::1)?"""
+    host = endereco.split("://", 1)[-1].split("/", 1)[0]
+    return bool(_HOSTS_LOCAIS.match(host))
 
 
 def _qr_svg(texto: str) -> str:
@@ -756,7 +778,10 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
         'alt="QR Code com o endereço desta página de verificação">'
         "<p>Aponte a câmera para conferir esta prova a qualquer momento.</p>"
         f'<p class="endereco">{e(endereco)}</p>'
-        '<button type="button" class="imprimir">Imprimir</button>'
+        + ('<p class="aviso-local" role="note">Este endereço só abre neste computador. '
+           "Para abrir no celular, defina ELO_URL_PUBLICA (veja o README).</p>"
+           if endereco_so_local(endereco) else "")
+        + '<button type="button" class="imprimir">Imprimir</button>'
         "</div>")
     dados_topo = "" if topo is None else (
         f'<div class="valor">{e(topo["valor"])}</div>'

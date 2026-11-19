@@ -439,6 +439,33 @@ As capturas de tela vão para a pasta informada. Use `CHROME` para indicar outro
 navegador e `PYTHON` para outro interpretador. Ele fica fora do `pytest` porque
 precisa de um navegador instalado.
 
+### QR Code no celular: demonstração na rede local
+
+O QR Code da página `/verificar` leva ao endereço pelo qual a página foi aberta. Aberta
+como `http://127.0.0.1:8000`, ela gera um QR que só funciona no próprio notebook, e a
+página avisa isso embaixo do QR. Para quem escaneia com o celular na mesma rede Wi-Fi:
+
+1. Descubra o IP do notebook na rede: `ipconfig` e anote o "Endereço IPv4" do Wi-Fi
+   (ex.: `192.168.0.15`).
+2. Suba a API ouvindo na rede e com a URL pública apontando para esse IP:
+
+   ```bat
+   set ELO_URL_PUBLICA=http://192.168.0.15:8000
+   uvicorn elo.api:app --host 0.0.0.0 --port 8000
+   ```
+
+3. Na primeira vez, o Windows pergunta se libera o Python no firewall: libere só em
+   **redes privadas**.
+
+O painel continua no notebook, em `http://127.0.0.1:8000/painel/`. As chaves da
+transportadora usam o WebCrypto, e o navegador só libera o WebCrypto em `https://` ou em
+`localhost`. O celular só abre a página `/verificar`, que não usa chave nenhuma. Com
+`--host 0.0.0.0`, qualquer aparelho da rede alcança a API: use só em rede de confiança,
+como a do escritório, e nunca num Wi-Fi público. Em produção, `ELO_URL_PUBLICA` é o
+domínio com `https` (ex.: `https://elo.suaempresa.com.br`). Um valor inválido, como um
+endereço sem `http://` ou `https://`, impede a API de subir, com uma mensagem que diz
+o motivo.
+
 ### Regenerar a captura da página de verificação
 
 A imagem do topo deste README (`docs/verificacao.png`) sai de um script:

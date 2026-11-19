@@ -579,3 +579,24 @@ def test_versao_de_impressao():
     assert "break-inside: avoid" in impressao
     js = (PASTA_PAINEL / "js" / "imprimir.js").read_text(encoding="utf-8")
     assert "window.print()" in js
+
+
+def test_aviso_quando_o_qr_so_abre_neste_computador(api, monkeypatch):
+    cp_id = fluxo_ate_compromisso(api)
+    monkeypatch.delenv("ELO_URL_PUBLICA", raising=False)
+    cliente = api["cliente"]
+    assert 'class="aviso-local"' not in cliente.get(f"/verificar/{cp_id}").text  # testserver
+    for local in ("http://127.0.0.1:8000", "http://localhost:8000", "http://0.0.0.0:8000"):
+        monkeypatch.setenv("ELO_URL_PUBLICA", local)
+        assert "Este endereço só abre neste computador" in cliente.get(f"/verificar/{cp_id}").text
+    monkeypatch.setenv("ELO_URL_PUBLICA", "http://192.168.0.15:8000")
+    texto = cliente.get(f"/verificar/{cp_id}").text
+    assert 'class="aviso-local"' not in texto
+    assert f"http://192.168.0.15:8000/verificar/{cp_id}" in texto
+
+
+@pytest.mark.parametrize("valor", ["elo.exemplo.com.br", "ftp://x", "https://x/?a=1", "https:// x"])
+def test_url_publica_invalida_impede_subir(monkeypatch, valor):
+    monkeypatch.setenv("ELO_URL_PUBLICA", valor)
+    with pytest.raises(ValueError, match="ELO_URL_PUBLICA inválida"):
+        criar_app()
