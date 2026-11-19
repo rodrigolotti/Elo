@@ -2,27 +2,11 @@
 
 import * as api from "./api.js";
 import { h } from "./dom.js";
-import { datasEmBrasilia, reais } from "./formatos.js";
+import { reais } from "./formatos.js";
+import { motivosOrdenados } from "./motivos.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
   "setembro", "outubro", "novembro", "dezembro"];
-const AVISO_PISO = "abaixo do piso mínimo da ANTT";
-const PISO_NAO_CONFERIDO = "não foi possível conferir o piso da ANTT";
-
-/** [status, texto] do motivo principal: risco (vermelho) ou atenção (âmbar). */
-function motivoPrincipal(item) {
-  const v = item.violacoes;
-  const p = item.frete?.piso;
-  if (v.some((x) => x.startsWith(AVISO_PISO)) && p && !p.estimado) {
-    return ["risco", `${reais(-p.folga_centavos)} abaixo do piso da ANTT`];
-  }
-  if (v.some((x) => x.includes(PISO_NAO_CONFERIDO))) return ["atencao", "Piso da ANTT não conferido"];
-  if (v.some((x) => x.includes("acima do limite"))) return ["atencao", "Acima do limite do mandato"];
-  if (v.some((x) => x.startsWith("mandato revogado"))) return ["atencao", "Mandato revogado"];
-  const texto = datasEmBrasilia(v[0] ?? "Aguardando decisão");
-  return ["atencao", texto.charAt(0).toUpperCase() + texto.slice(1)];
-}
-
 // só as UFs, numa linha (os CEPs estão no cartão de Aprovações)
 const rota = (c) => `${c.origem_uf} → ${c.destino_uf}`;
 
@@ -41,14 +25,17 @@ export async function telaVisaoGeral() {
   const pendentes = aguardando.itens.length === 0
     ? h("p", { class: "vg-vazio" }, "Nada esperando decisão agora.")
     : aguardando.itens.map((item) => {
-      const [status, texto] = motivoPrincipal(item);
+      const motivos = motivosOrdenados(item.violacoes, item.frete);
       const o = item.oferta;
       return h("a", { class: "vg-linha", href: "#/aprovacoes" },
         h("span", { class: "vg-valor" }, reais(o.condicoes.valor_centavos)),
         h("span", { class: "vg-quem" },
           h("span", { class: "vg-rota" }, rota(o.carga)),
           h("span", { class: "vg-embarcador" }, item.embarcador.nome ?? item.embarcador.cnpj)),
-        h("span", { class: `vg-status ${status}` }, texto));
+        // todos os motivos, o mais grave primeiro (em destaque)
+        h("span", { class: "vg-motivos" }, (motivos.length ? motivos
+          : [{ status: "atencao", texto: "Aguardando decisão" }])
+          .map((m) => h("span", { class: `vg-status ${m.status}` }, m.texto))));
     });
 
   const embarcadores = v.embarcadores.length === 0

@@ -293,3 +293,26 @@ def test_contraste_aa_da_wcag(texto, fundo):
     cores = _variaveis_css()
     razao = _contraste(cores[texto], cores[fundo])
     assert razao >= 4.5, f"{texto} sobre {fundo}: {razao:.2f}:1 (mínimo AA 4,5:1)"
+
+
+# ---------- motivos: o mais grave primeiro ----------
+
+PISO_CONFERIDO = {"piso": {"estimado": False, "folga_centavos": -185_720}}
+
+
+def test_motivos_do_mais_grave_ao_menos_grave(navegador):
+    violacoes = ["valor R$ 9.000,00 acima do limite de R$ 6.000,00",
+                 "mandato revogado em 2026-11-19T00:14:03+00:00",
+                 "abaixo do piso mínimo da ANTT (R$ 3.457,20): risco de multa"]
+    assert chamar(navegador, "motivos.js", "motivosOrdenados", violacoes, PISO_CONFERIDO) == [
+        {"status": "risco", "texto": "R$ 1.857,20 abaixo do piso da ANTT"},
+        {"status": "atencao", "texto": "Mandato revogado"},
+        {"status": "atencao", "texto": "Acima do limite do mandato"},
+    ]
+
+
+def test_motivo_sem_rotulo_curto_vira_frase_sem_data_crua(navegador):
+    r = chamar(navegador, "motivos.js", "motivosOrdenados",
+               ["origem RJ fora das UFs autorizadas", "mandato venceu em 2026-11-01T00:00:00-03:00"],
+               None)
+    assert [m["texto"] for m in r] == ["Mandato vencido", "Origem RJ fora das UFs autorizadas"]

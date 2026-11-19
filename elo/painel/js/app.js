@@ -12,6 +12,7 @@ import {
 } from "./cofre.js";
 import { h, limpar } from "./dom.js";
 import { telaVisaoGeral } from "./visao.js";
+import { AVISO_PISO, PISO_NAO_CONFERIDO, motivosOrdenados } from "./motivos.js";
 import { telaHistorico } from "./historico.js";
 import {
   avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
@@ -434,8 +435,6 @@ function blocoCarga(carga, tipoCarga) {
       + (cubado > carga.peso_kg ? ", maior que o peso real" : "")));
 }
 
-const AVISO_PISO = "abaixo do piso mínimo da ANTT";
-const PISO_NAO_CONFERIDO = "não foi possível conferir o piso da ANTT";
 const MINIMO_JUSTIFICATIVA = 10;
 const maiuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
 

@@ -366,6 +366,14 @@ async function percorrerTelas(p, largura, altura, prefixo) {
     if (largura >= 1000 && (!m.demo || m.topo > 66 || m.cortados.length)) {
       falhar(`topo no desktop: ${JSON.stringify(m)}`);
     }
+    if (rota === "/visao-geral") {
+      // em cada oferta, o motivo mais grave (vermelho) vem antes dos outros
+      const fora = await p.avaliar(`[...document.querySelectorAll(".vg-motivos")].filter((m) => {
+        const s = [...m.children].map((c) => c.classList.contains("risco"));
+        return s.indexOf(false) !== -1 && s.lastIndexOf(true) > s.indexOf(false);
+      }).length`);
+      if (fora) falhar(`Visão geral: ${fora} oferta(s) com motivo grave depois de um mais leve`);
+    }
     await p.capturar(`${prefixo}-${rota.slice(1)}`);
   }
 }

@@ -266,7 +266,9 @@ a.vg-linha:hover .vg-rota, a.vg-linha:focus-visible .vg-rota { text-decoration: 
 .vg-quem { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .vg-rota { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vg-embarcador { color: var(--suave); font-size: .9rem; }
-.vg-status { font-weight: 600; font-size: .9rem; text-align: right; }
+.vg-motivos { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.vg-status { font-weight: 500; font-size: .85rem; text-align: right; }
+.vg-status:first-child { font-weight: 700; font-size: .9rem; }
 .vg-embarcadores { grid-template-columns: minmax(0, 1fr) auto auto; }
 .vg-total { color: var(--suave); white-space: nowrap; }
 .vg-vazio { color: var(--suave); padding: 14px 0; border-top: 1px solid var(--linha); margin: 0; }
@@ -278,6 +280,7 @@ a.vg-linha:hover .vg-rota, a.vg-linha:focus-visible .vg-rota { text-decoration: 
   .vg-grande { font-size: 2.2rem; }
   .vg-duas { grid-template-columns: 1fr; gap: 32px; margin-top: 32px; }
   .vg-linha { grid-template-columns: 1fr; gap: 4px; }
+  .vg-motivos { align-items: flex-start; }
   .vg-status { text-align: left; }
   .vg-embarcadores { grid-template-columns: 1fr auto; }
   .vg-embarcadores .vg-total { grid-column: 1 / -1; }
