@@ -993,6 +993,51 @@ class Plataforma:
                               "verificacao": f"/verificar/{cp['id']}"})
         return saida
 
+    def listar_fretes(self, cnpj: str, situacao: str | None = None) -> list[dict[str, Any]]:
+        """Cada oferta da organização como um frete, com a linha do tempo tirada do
+        registro: pedido, oferta do agente, aprovação ou recusa, aceite.
+
+        situacao: "fechado" (aceito), "recusado" ou "em-aberto" (enviada ou
+        aguardando decisão). Mais recentes primeiro.
+        """
+        cnpj = self._org(cnpj)["cnpj"]
+        compromisso_da_oferta = {self.ofertas_por_hash.get(cp["oferta_hash"]): cp
+                                 for cp in self.compromissos.values()}
+        fretes = []
+        for oferta in self.ofertas.values():
+            if oferta["emissor"]["cnpj"] != cnpj:
+                continue
+            status = self.status_oferta[oferta["id"]]
+            atual = {"aceita": "fechado", "recusada": "recusado"}.get(status, "em-aberto")
+            if situacao is not None and situacao != atual:
+                continue
+            pedido = self.pedidos.get(oferta["referencia"]["pedido_id"], {})
+            problemas = self.violacoes_oferta.get(oferta["id"], [])
+            tempo: list[dict[str, Any]] = []
+            if pedido:
+                tempo.append({"etapa": "pedido", "em": pedido["recebido_em"], "por": None,
+                              "detalhe": None})
+            tempo.append({"etapa": "oferta", "em": oferta["emitida_em"],
+                          "por": self.agentes.get(oferta["emissor"]["agente_id"], {}).get("nome"),
+                          "detalhe": "; ".join(problemas) if problemas else "dentro do mandato"})
+            if oferta["id"] in self.recusas:
+                r = self.recusas[oferta["id"]]
+                tempo.append({"etapa": "recusa", "em": r["em"], "por": r["recusado_por"],
+                              "detalhe": r.get("motivo") or None})
+            elif oferta["id"] in self.aprovacoes:
+                a = self.aprovacoes[oferta["id"]]
+                tempo.append({"etapa": "aprovacao", "em": a["em"], "por": a["aprovado_por"],
+                              "detalhe": a.get("justificativa") or None})
+            cp = compromisso_da_oferta.get(oferta["id"])
+            if cp is not None:
+                tempo.append({"etapa": "aceite", "em": cp["aceite"]["em"], "por": cp["aceite"]["nome"],
+                              "detalhe": None})
+            fretes.append({"oferta": oferta, "embarcador": self._embarcador(cnpj, oferta),
+                           "status": status, "situacao": atual, "linha_do_tempo": tempo,
+                           "precisou_aprovacao": bool(problemas),
+                           "verificacao": f"/verificar/{cp['id']}" if cp else None})
+        return sorted(fretes, key=lambda f: f["oferta"]["emitida_em"], reverse=True)
+
     def visao_geral(self, cnpj: str) -> dict[str, Any]:
         """Resumo do mês corrente (horário de Brasília) para a tela inicial do painel.
 

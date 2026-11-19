@@ -293,6 +293,36 @@ a.vg-linha:hover .vg-rota, a.vg-linha:focus-visible .vg-rota { text-decoration: 
 .subtitulo { font-size: 1rem; }
 th { font-weight: 600; }
 
+/* ---------- histórico: filtro e linha do tempo ---------- */
+
+.filtros { display: flex; gap: 8px; margin: 0 0 20px; flex-wrap: wrap; }
+.filtro {
+  font: inherit; font-weight: 600; font-size: .9rem; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--borda); background: var(--superficie); color: var(--suave); cursor: pointer;
+}
+.filtro:hover { color: var(--texto); }
+.filtro[aria-pressed="true"] { background: var(--marca); border-color: var(--marca); color: #fff; }
+.filtro:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; }
+.etiqueta-status { font-size: .8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.etiqueta-status.ok { color: var(--bom-texto); background: var(--bom-fundo); }
+.etiqueta-status.atencao { color: var(--alerta-texto); background: var(--alerta-fundo); }
+.etiqueta-status.risco { color: var(--ruim-texto); background: var(--ruim-fundo); }
+
+/* desktop: etapas lado a lado, ligadas por uma linha; celular: na vertical */
+.lt { list-style: none; margin: 4px 0 0; padding: 0; display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 16px; }
+.lt-etapa { position: relative; padding: 22px 0 0; min-width: 0; }
+.lt-etapa::before { content: ""; position: absolute; top: 4px; left: 0; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--marca); }
+.lt-etapa:not(:last-child)::after { content: ""; position: absolute; top: 9px; left: 18px; right: -10px;
+  height: 2px; background: var(--borda); }
+.lt-recusa::before { background: var(--ruim); }
+.lt-titulo { font-weight: 700; }
+.lt-quando { display: block; color: var(--suave); font-size: .88rem; }
+.lt-quem { font-size: .9rem; }
+.lt-detalhe { font-size: .85rem; color: var(--suave); margin-top: 2px; overflow-wrap: anywhere; }
+.frete-rodape { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--linha); font-weight: 600; }
+
 /* ---------- celular (até 640 px) ---------- */
 
 @media (max-width: 640px) {
@@ -317,4 +347,8 @@ th { font-weight: 600; }
   td .mono { word-break: normal; white-space: nowrap; }
   .links { flex-direction: column; gap: 10px; }
   .rodape { padding: 16px; }
+  .lt { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-left: 4px; }
+  .lt-etapa { padding: 0 0 0 24px; }
+  .lt-etapa::before { top: 5px; }
+  .lt-etapa:not(:last-child)::after { top: 20px; left: 5px; right: auto; bottom: -12px; width: 2px; height: auto; }
 }

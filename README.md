@@ -74,7 +74,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 402 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 409 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -167,6 +167,8 @@ organização. Não há senha: entra quem tem a chave da organização.
 | `POST /sessoes` | Troca o desafio assinado pela organização por um token de sessão de 30 minutos |
 | `DELETE /sessoes` | Encerra a sessão |
 | `GET /organizacao`, `/agentes`, `/mandatos`, `/ofertas?status=...`, `/compromissos` | Consultas da organização logada |
+| `GET /visao-geral` | Números do mês (fechados, aguardando, barrados abaixo do piso) e fretes por embarcador |
+| `GET /fretes?situacao=fechado\|em-aberto\|recusado` | Fretes com a linha do tempo tirada do registro: pedido, oferta (dentro ou fora do mandato e por quê), aprovação ou recusa (quem e justificativa ou motivo), aceite (quem) |
 
 O token vai no cabeçalho `Authorization: Bearer <token>`, e a API guarda só o
 hash dele. Sem sessão válida, a resposta é 401. Fora as duas rotas de
@@ -195,7 +197,7 @@ roteiro do Chrome confere isso em 390 px.
 | Agentes | Cria o certificado do agente a partir da chave pública dele |
 | Mandatos | Define valor máximo, UFs, tipos de carga e validade, e revoga mandatos |
 | Aprovações | Fila das ofertas fora do mandato, com o motivo de cada uma: aprovar ou recusar |
-| Histórico | Compromissos firmados, com link para `/verificar/{id}` |
+| Histórico | Cada frete com a linha do tempo (pedido, oferta, aprovação ou recusa, aceite) no horário de Brasília, filtro Fechados / Em aberto / Recusados e link para `/verificar/{id}`. No desktop as etapas ficam lado a lado; no celular, na vertical |
 | Segurança | Quando o acesso e o arquivo de recuperação foram criados, histórico e "gerar novo arquivo de recuperação" (códigos técnicos em "Ver detalhes") |
 | Recuperar | Troca a chave da organização com o arquivo de recuperação e a frase-senha |
 

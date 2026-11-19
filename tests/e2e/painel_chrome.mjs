@@ -645,8 +645,31 @@ async function roteiro() {
   console.log("7. Embarcador aceita; histórico com link para /verificar");
   const cps = [await aceitar(aprovar), await aceitar(dentro)];
   await p.menu("/historico");
-  await p.aguardar("document.querySelectorAll('tbody tr').length === 2");
-  const links = await p.avaliar(`[...document.querySelectorAll("tbody a")].map((a) => a.getAttribute("href"))`);
+  await p.aguardar("document.querySelectorAll('article.frete').length === 2");
+  const links = await p.avaliar(`[...document.querySelectorAll("article.frete a")].map((a) => a.getAttribute("href"))`);
+  // linha do tempo do frete aprovado: pedido, oferta, aprovação, aceite, em ordem e em Brasília
+  const tempo = await p.avaliar(`[...document.querySelectorAll(
+    'article.frete[data-oferta="${aprovar.oferta.id}"] .lt-etapa')].map((li) => ({
+      titulo: li.querySelector(".lt-titulo").textContent,
+      quando: li.querySelector("time").textContent, em: li.querySelector("time").getAttribute("datetime"),
+      texto: li.innerText }))`);
+  if (tempo.map((e) => e.titulo).join("|") !== "Pedido recebido|Oferta do agente|Aprovada|Aceita pelo embarcador") {
+    falhar(`linha do tempo errada: ${JSON.stringify(tempo)}`);
+  }
+  if (!tempo.every((e) => /^\d{2}\/\d{2}\/\d{4} às \d{2}:\d{2}$/.test(e.quando))) {
+    falhar(`horário fora do formato de Brasília: ${JSON.stringify(tempo)}`);
+  }
+  if (tempo.map((e) => Date.parse(e.em)).some((t, i, a) => i && t < a[i - 1])) falhar("etapas fora de ordem");
+  if (!tempo[1].texto.includes("Fora do mandato") || !tempo[2].texto.includes("Ana Gestora")
+      || !tempo[3].texto.includes("Maria")) {
+    falhar(`linha do tempo sem quem fez o quê: ${JSON.stringify(tempo)}`);
+  }
+  await p.clicar("Recusados");
+  await p.aguardar(`document.querySelector('article.frete[data-oferta="${recusar.oferta.id}"]')`);
+  await p.aguardarTexto("Motivo: Valor acima da tabela do cliente");
+  await p.capturar("historico-recusados");
+  await p.clicar("Fechados");
+  await p.aguardar("document.querySelectorAll('article.frete').length === 2");
   for (const cp of cps) {
     if (!links.includes(`/verificar/${cp.id}`)) falhar(`sem link para ${cp.id}`);
   }
@@ -660,6 +683,7 @@ async function roteiro() {
   await p.capturar("verificacao");
   await p.ir(`${BASE}/painel/#/mandatos`);
   ok("2 compromissos, links certos, 15 de 15 checagens OK");
+  ok("histórico: linha do tempo pedido → oferta → aprovação → aceite em Brasília; filtro de recusados");
 
   console.log("8. Revogação de mandato");
   await p.aguardarTexto("Revogar mandato");

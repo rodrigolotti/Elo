@@ -12,6 +12,7 @@ import {
 } from "./cofre.js";
 import { h, limpar } from "./dom.js";
 import { telaVisaoGeral } from "./visao.js";
+import { telaHistorico } from "./historico.js";
 import {
   avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
 } from "./ui.js";
@@ -801,28 +802,6 @@ async function telaMandatos() {
         ordenados.length ? ordenados.map(cartaoMandato) : vazio("Nenhum mandato ainda.")),
       agentes.length ? form : vazio("Crie um agente antes de emitir um mandato.",
         h("a", { class: "botao primario", href: "#/agentes" }, "Ir para agentes"))));
-}
-
-// ---------- histórico ----------
-
-async function telaHistorico() {
-  const compromissos = await api.obter("/compromissos");
-  compromissos.sort((a, b) => b.compromisso.aceite.em.localeCompare(a.compromisso.aceite.em));
-  return h("section", {}, cabecalho("Histórico de compromissos",
-    "Ofertas aceitas pelos embarcadores. Cada uma pode ser verificada por qualquer pessoa."),
-    compromissos.length === 0 ? vazio("Nenhum compromisso firmado ainda.") : h("table", {},
-      h("thead", {}, h("tr", {},
-        ["Aceite em", "Embarcador", "Valor", "Rota", "Compromisso", ""].map((t) => h("th", {}, t)))),
-      h("tbody", {}, compromissos.map(({ compromisso: cp, oferta, verificacao, embarcador }) => h("tr", {},
-        h("td", {}, emBrasilia(cp.aceite.em)),
-        h("td", {}, embarcador?.nome ?? mono(cp.aceite.cnpj),
-          h("div", { class: "ajuda" }, embarcador?.nome ? mono(cp.aceite.cnpj) : null,
-            embarcador?.nome ? " · " : null, `aceito por ${cp.aceite.nome}`)),
-        h("td", { class: "numero" }, reais(oferta.condicoes.valor_centavos)),
-        h("td", {}, rota(oferta.carga)),
-        h("td", {}, mono(cp.id)),
-        h("td", {}, h("a", { href: verificacao, target: "_blank", rel: "noopener" },
-          "Verificar ↗")))))));
 }
 
 // ---------- início ----------

@@ -126,6 +126,7 @@ class PedirDesafio(_Corpo):
 
 
 StatusOferta = Literal["aguardando_aprovacao", "enviada", "aceita", "recusada"]
+SituacaoFrete = Literal["fechado", "em-aberto", "recusado"]
 
 
 class Aceite(_Corpo):
@@ -380,6 +381,12 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None,
         with trava:
             itens = plat().listar_ofertas(cnpj, status)
         return [{**item, "frete": _frete(item, app.state.estimador)} for item in itens]
+
+    @app.get("/fretes", tags=["consulta"])
+    def listar_fretes(cnpj: Logado, situacao: SituacaoFrete | None = None) -> list[dict[str, Any]]:
+        """Fretes com a linha do tempo (pedido, oferta, aprovação ou recusa, aceite)."""
+        with trava:
+            return plat().listar_fretes(cnpj, situacao)
 
     @app.get("/visao-geral", tags=["consulta"])
     def visao_geral(cnpj: Logado) -> dict[str, Any]:
