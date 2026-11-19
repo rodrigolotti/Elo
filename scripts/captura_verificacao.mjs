@@ -122,7 +122,8 @@ async function principal() {
     throw new Error(`checagens: ${pagina.ok} de ${pagina.checagens} OK`);
   }
   const cnpjs = pagina.texto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) ?? [];
-  const estranhos = cnpjs.filter((c) => c !== "11.222.333/0001-81");
+  // só os CNPJs de exemplo dos testes: transportadora e embarcador
+  const estranhos = cnpjs.filter((c) => !["11.222.333/0001-81", "22.333.444/0001-81"].includes(c));
   if (estranhos.length) throw new Error(`CNPJ que não é o de exemplo na imagem: ${estranhos}`);
   const qr = `${URL_PUBLICA}/verificar/${escolhido}`;
   if (!pagina.texto.includes(qr)) throw new Error(`o QR Code não aponta para ${qr}`);
