@@ -333,6 +333,21 @@ th { font-weight: 600; }
 .lt-detalhe { font-size: .85rem; color: var(--suave); margin-top: 2px; overflow-wrap: anywhere; }
 .frete-rodape { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--linha); font-weight: 600; }
 
+/* ---------- cartão de oferta: compacto no celular ---------- */
+
+.so-celular { display: none; }
+.c-motivos { list-style: none; margin: 10px 0 0; padding: 0; font-size: .9rem; }
+.c-motivos li { font-weight: 500; }
+.c-motivos li:first-child { font-weight: 700; }
+.c-motivos .risco { color: var(--status-risco); }
+.c-motivos .atencao { color: var(--status-atencao); }
+.detalhes-cartao > summary {
+  cursor: pointer; font-weight: 600; color: var(--marca); padding: 10px 0 4px; list-style-position: inside;
+}
+@media (min-width: 641px) {
+  .detalhes-cartao > summary { display: none; }
+}
+
 /* ---------- celular (até 640 px) ---------- */
 
 @media (max-width: 640px) {
@@ -357,6 +372,12 @@ th { font-weight: 600; }
   td .mono { word-break: normal; white-space: nowrap; }
   .links { flex-direction: column; gap: 10px; }
   .rodape { padding: 16px; }
+  .so-celular { display: block; }
+  .cartao-oferta .cartao-topo { margin-bottom: 0; }
+  .cartao-oferta .c-id { display: none; } /* o código da oferta fica em "Ver detalhes" */
+  .cartao-oferta .cartao-topo h2.c-valor { font-size: 1.7rem; }
+  .detalhes-cartao { margin-top: 6px; }
+  .detalhes-cartao[open] > summary { margin-bottom: 8px; }
   .lt { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-left: 4px; }
   .lt-etapa { padding: 0 0 0 24px; }
   .lt-etapa::before { top: 5px; }

@@ -520,6 +520,12 @@ function caixaAprovacao(violacoes, frete) {
     ]));
 }
 
+const TELA_LARGA = window.matchMedia("(min-width: 641px)");
+// ao alargar a janela, os detalhes abrem (no desktop o "Ver detalhes" nem aparece)
+TELA_LARGA.addEventListener("change", (e) => {
+  if (e.matches) document.querySelectorAll("details.detalhes-cartao").forEach((d) => { d.open = true; });
+});
+
 function cartaoOferta(item, agentes) {
   const { oferta, violacoes, embarcador } = item;
   const c = oferta.condicoes;
@@ -599,16 +605,23 @@ function cartaoOferta(item, agentes) {
   recusar.addEventListener("click", () => decidir(recusar, "recusa"));
 
   const agente = agentes.get(oferta.emissor.agente_id);
-  return h("article", { class: "cartao" },
+  // no celular o cartão é compacto (valor, rota, embarcador, motivos, botões) e o
+  // resto fica em "Ver detalhes"; no desktop os detalhes já vêm abertos
+  const motivos = motivosOrdenados(violacoes, item.frete);
+  return h("article", { class: "cartao cartao-oferta", "data-oferta": oferta.id },
     h("div", { class: "cartao-topo" },
       h("div", {}, h("h2", { class: "c-valor" }, reais(c.valor_centavos)),
         h("div", { class: "c-rota" }, rota(oferta.carga)),
-        h("div", { class: "ajuda" }, nomeEmbarcador, " · ", mono(oferta.id))),
+        h("div", { class: "ajuda" }, nomeEmbarcador, h("span", { class: "c-id" }, " · ", mono(oferta.id)))),
       h("span", { class: `etiqueta ${vencida ? "ruim" : "neutro"}`,
                   title: `Válida até ${emBrasilia(oferta.valida_ate)}` },
         prazoAte(oferta.valida_ate))),
-    caixaAprovacao(violacoes, item.frete),
-    dados([
+    motivos.length ? h("ul", { class: "c-motivos so-celular", "aria-label": "Por que precisa de aprovação" },
+      motivos.map((m) => h("li", { class: m.status }, m.texto))) : null,
+    h("details", { class: "detalhes-cartao", open: TELA_LARGA.matches },
+      h("summary", {}, "Ver detalhes"),
+      caixaAprovacao(violacoes, item.frete),
+      dados([
       ["Embarcador", blocoEmbarcador(embarcador)],
       ["Rota", rota(oferta.carga)],
       ["Carga", blocoCarga(oferta.carga, item.tipo_carga)],
@@ -619,7 +632,8 @@ function cartaoOferta(item, agentes) {
       ["Emitida em", emBrasilia(oferta.emitida_em)],
       ["Agente", agente ? agente.nome : oferta.emissor.agente_id],
       ["Mandato", mono(oferta.mandato_id)],
-    ]),
+      ["Oferta", mono(oferta.id)],
+    ])),
     h("div", { class: "acoes" }, recusar, aprovar));
 }
 

@@ -367,6 +367,16 @@ async function percorrerTelas(p, largura, altura, prefixo) {
     if (largura >= 1000 && (!m.demo || m.topo > 66 || m.cortados.length)) {
       falhar(`topo no desktop: ${JSON.stringify(m)}`);
     }
+    if (rota === "/aprovacoes") {
+      const c = await p.avaliar(`[...document.querySelectorAll("article.cartao-oferta")].map((a) => ({
+        aberto: a.querySelector("details").open, altura: Math.round(a.getBoundingClientRect().height),
+        motivos: getComputedStyle(a.querySelector(".c-motivos") ?? document.body).display,
+        botoes: [...a.querySelectorAll(".acoes button")].filter((b) => b.offsetParent).length }))`);
+      const errados = c.filter((x) => largura < 500
+        ? x.aberto || x.altura > 380 || x.motivos === "none" || x.botoes !== 2
+        : !x.aberto || x.botoes !== 2);
+      if (!c.length || errados.length) falhar(`cartões de Aprovações em ${largura} px: ${JSON.stringify(c)}`);
+    }
     if (rota === "/visao-geral") {
       // em cada oferta, o motivo mais grave (vermelho) vem antes dos outros
       const fora = await p.avaliar(`[...document.querySelectorAll(".vg-motivos")].filter((m) => {
@@ -947,6 +957,13 @@ async function roteiro() {
   await percorrerTelas(p2, 1280, 900, "desktop");
   ok("desktop (1280 px): topo numa linha, menu numa linha, botão de demonstração, sem rolagem lateral");
   await percorrerTelas(p2, 390, 844, "celular");
+  // "Ver detalhes" abre a caixa do motivo e os dados completos
+  await p2.avaliar("location.hash = '#/aprovacoes'");
+  await p2.aguardar("document.querySelector('article.cartao-oferta details summary')");
+  await p2.avaliar("document.querySelector('article.cartao-oferta details summary').click()");
+  await p2.aguardar("document.querySelector('article.cartao-oferta details').open "
+    + "&& document.querySelector('article.cartao-oferta .caixa.motivo').offsetParent");
+  await p2.capturar("celular-aprovacoes-detalhes");
   await p2.cdp("Emulation.setDeviceMetricsOverride",
     { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   ok("celular (390 px): todas as telas sem rolagem lateral, menu numa linha, sem botão de demonstração");
