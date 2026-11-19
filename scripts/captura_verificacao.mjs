@@ -22,6 +22,8 @@ const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SAIDA = resolve(process.argv[2] ?? join(RAIZ, "docs", "verificacao.png"));
 const LARGURA = 780;
 const PYTHON = process.env.PYTHON ?? "python";
+// domínio reservado para exemplos (RFC 2606): o QR da imagem não aponta para ninguém
+const URL_PUBLICA = "https://elo.example";
 const CHROME = process.env.CHROME ?? [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
@@ -62,7 +64,8 @@ async function aguardarUrl(url) {
 async function principal() {
   if (!CHROME) throw new Error("Chrome/Edge não encontrado: defina CHROME");
   processos.push(spawn(PYTHON, ["-m", "uvicorn", "elo.api:app", "--port", String(PORTA_API)],
-    { cwd: RAIZ, env: { ...process.env, ELO_DB: join(temporario, "elo.db") }, stdio: "ignore" }));
+    { cwd: RAIZ, env: { ...process.env, ELO_DB: join(temporario, "elo.db"), ELO_URL_PUBLICA: URL_PUBLICA },
+      stdio: "ignore" }));
   await aguardarUrl(`${BASE}/openapi.json`);
 
   const ids = execFileSync(PYTHON, ["-c", DEMO_COM_CNPJ_FIXO, BASE],
@@ -121,7 +124,9 @@ async function principal() {
   const cnpjs = pagina.texto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) ?? [];
   const estranhos = cnpjs.filter((c) => c !== "11.222.333/0001-81");
   if (estranhos.length) throw new Error(`CNPJ que não é o de exemplo na imagem: ${estranhos}`);
-  if (/@|[A-Za-z]:[\\/]|\/home\/|\/Users\//.test(pagina.texto)) {
+  const qr = `${URL_PUBLICA}/verificar/${escolhido}`;
+  if (!pagina.texto.includes(qr)) throw new Error(`o QR Code não aponta para ${qr}`);
+  if (/@|[A-Za-z]:[\\/]|\/home\/|\/Users\//.test(pagina.texto.replaceAll(qr, ""))) {
     throw new Error("e-mail ou caminho de arquivo no trecho da imagem");
   }
 

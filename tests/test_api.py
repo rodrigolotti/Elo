@@ -1,5 +1,6 @@
 """Testes da API HTTP com TestClient. As chaves ficam sempre do lado do teste (cliente)."""
 
+import html
 import re
 from datetime import datetime, timezone
 
@@ -532,3 +533,49 @@ def test_pagina_invalida_avisa_no_resumo_para_nao_confiar(api, plataforma):
     texto = api["cliente"].get(f"/verificar/{cp_id}").text
     topo = texto[texto.index('<section class="topo invalido">'):texto.index("</section>")]
     assert "COMPROMISSO INVÁLIDO" in topo and "Não confie nestes dados" in topo
+
+
+# ---------- /verificar: QR Code e impressão ----------
+
+def fluxo_ate_compromisso(api):
+    _, emitida = emitir(api)
+    return aceitar(api, emitida["oferta"]["id"]).json()["id"]
+
+
+def test_qr_code_aponta_para_a_propria_pagina(api, monkeypatch):
+    import segno
+    from urllib.parse import unquote
+    cp_id = fluxo_ate_compromisso(api)
+    monkeypatch.setenv("ELO_URL_PUBLICA", "https://elo.exemplo.com.br/")
+    texto = api["cliente"].get(f"/verificar/{cp_id}").text
+    endereco = f"https://elo.exemplo.com.br/verificar/{cp_id}"
+    assert f'<p class="endereco">{endereco}</p>' in texto
+    src = re.search(r'<img src="(data:image/svg\+xml[^"]+)"[^>]*alt="QR Code', texto).group(1)
+    esperado = segno.make(endereco, error="m")
+    svg = unquote(src.split(",", 1)[1])
+    # mesmos módulos escuros que o QR do endereço: o desenho codifica esta URL
+    assert svg.startswith("<svg") and "<script" not in svg and "viewBox=" in svg
+    assert src == html.escape(esperado.svg_data_uri(scale=1, border=4, dark="#0b2545",
+                                                    light="#ffffff", omitsize=True))
+
+
+def test_qr_code_sem_url_publica_usa_o_endereco_do_pedido(api, monkeypatch):
+    cp_id = fluxo_ate_compromisso(api)
+    monkeypatch.delenv("ELO_URL_PUBLICA", raising=False)
+    texto = api["cliente"].get(f"/verificar/{cp_id}").text
+    assert f'<p class="endereco">http://testserver/verificar/{cp_id}</p>' in texto
+
+
+def test_compromisso_inexistente_nao_tem_qr_code(cliente):
+    texto = cliente.get("/verificar/cp_naoexiste").text
+    assert "QR Code" not in texto and 'class="imprimir"' not in texto
+
+
+def test_versao_de_impressao():
+    from elo.api import PASTA_PAINEL
+    css = (PASTA_PAINEL / "verificar.css").read_text(encoding="utf-8")
+    impressao = css[css.index("@media print"):]
+    assert ".imprimir" in impressao and "display: none" in impressao
+    assert "break-inside: avoid" in impressao
+    js = (PASTA_PAINEL / "js" / "imprimir.js").read_text(encoding="utf-8")
+    assert "window.print()" in js

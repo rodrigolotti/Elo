@@ -680,10 +680,35 @@ async function roteiro() {
   }
   await p.ir(`${BASE}/verificar/${cps[0].id}`);
   await p.aguardarTexto("COMPROMISSO VÁLIDO");
+  await p.aguardar("document.querySelector('.qr img')?.complete && document.fonts.status === 'loaded'");
+  const qr = await p.avaliar(`({ largura: document.querySelector(".qr img").naturalWidth,
+    endereco: document.querySelector(".qr .endereco").textContent, aqui: location.href,
+    css: getComputedStyle(document.querySelector(".topo")).display,
+    fonte: getComputedStyle(document.body).fontFamily })`);
+  if (!qr.largura || qr.endereco !== qr.aqui) falhar(`QR Code: ${JSON.stringify(qr)}`);
+  if (qr.css !== "grid" || !qr.fonte.startsWith('"Inter"') && !qr.fonte.startsWith("Inter")) {
+    falhar(`estilo da página de verificação não carregou (CSP?): ${JSON.stringify(qr)}`);
+  }
   await p.capturar("verificacao");
+  await p.cdp("Emulation.setEmulatedMedia", { media: "print" });
+  const impressao = await p.avaliar(`({
+    botao: getComputedStyle(document.querySelector(".imprimir")).display,
+    qr: getComputedStyle(document.querySelector(".qr img")).display })`);
+  if (impressao.botao !== "none" || impressao.qr === "none") {
+    falhar(`versão de impressão: ${JSON.stringify(impressao)}`);
+  }
+  await p.capturar("verificacao-impressao");
+  await p.cdp("Emulation.setEmulatedMedia", { media: "" });
+  await p.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await esperar(200);
+  const estreita = await p.avaliar("document.documentElement.scrollWidth");
+  if (estreita > 390) falhar(`/verificar rola para os lados em 390 px (${estreita} px)`);
+  await p.capturar("celular-verificacao");
+  await p.cdp("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   await p.ir(`${BASE}/painel/#/mandatos`);
   ok("2 compromissos, links certos, 15 de 15 checagens OK");
   ok("histórico: linha do tempo pedido → oferta → aprovação → aceite em Brasília; filtro de recusados");
+  ok("/verificar: CSP sem nada inline, QR Code apontando para a própria página, impressão sem o botão, 390 px");
 
   console.log("8. Revogação de mandato");
   await p.aguardarTexto("Revogar mandato");

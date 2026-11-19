@@ -26,7 +26,16 @@ flowchart LR
 
 ![Página pública de verificação mostrando o compromisso válido, com 15 de 15 checagens OK](docs/verificacao.png)
 
-*Página pública de verificação: no topo, o resumo para o embarcador (valor, rota, transportadora e data do fechamento); abaixo, as 15 checagens independentes que provam o acordo (dados fictícios)*
+*Página pública de verificação: no topo, o resumo para o embarcador (valor, rota, transportadora e data do fechamento) e um QR Code que aponta para a própria página; abaixo, as 15 checagens independentes que provam o acordo (dados fictícios)*
+
+**QR Code e impressão.** O botão "Imprimir" gera uma folha para arquivar junto da nota,
+sem o botão e sem links. O QR Code da folha leva de volta à página, que refaz as 15
+checagens na hora. O QR é gerado no próprio servidor pela biblioteca
+[segno](https://github.com/heuer/segno) (Python puro, sem dependências) e vai na página
+como imagem `data:`, sem serviço externo. Em produção, defina `ELO_URL_PUBLICA`
+(ex.: `https://elo.suaempresa.com.br`) para o QR usar o domínio oficial. Sem ela, ele usa
+o endereço pelo qual a página foi pedida. A página tem CSP própria (`default-src 'none'`,
+sem estilo nem script inline): o CSS e o botão de imprimir vêm de `/painel`.
 
 ### Rodar em 6 comandos (cmd do Windows)
 
@@ -35,7 +44,7 @@ git clone https://github.com/rodrigolotti/Elo.git
 cd Elo
 python -m venv .venv
 .venv\Scripts\activate.bat
-pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
+pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata segno
 uvicorn elo.api:app
 ```
 
@@ -72,9 +81,9 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
+pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata segno
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 409 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 415 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -85,7 +94,7 @@ Na pasta do projeto, num Prompt de Comando (`cmd`):
 :: 1. ambiente virtual e dependências (só na primeira vez)
 python -m venv .venv
 .venv\Scripts\activate.bat
-pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
+pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata segno
 
 :: 2. testes
 python -m pytest -q
@@ -444,7 +453,9 @@ pertencer a empresas reais. Depois escolhe o compromisso que passou por aprovaç
 humana e fotografa a página `/verificar` num Chrome (ou Edge) headless, com 780 px
 de largura, do topo até o fim da tabela de checagens. O script falha, sem gravar
 nada, se alguma checagem não der OK ou se o trecho fotografado mostrar outro
-CNPJ, um e-mail ou um caminho de arquivo. Sem argumento, ele grava em
+CNPJ, um e-mail ou um caminho de arquivo. O QR Code da imagem aponta para
+`https://elo.example`, um domínio reservado para exemplos, e não para o servidor
+temporário. Sem argumento, ele grava em
 `docs/verificacao.png`; para outro lugar, passe o caminho
 (`node scripts\captura_verificacao.mjs C:\temp\teste.png`). Aceita as mesmas
 variáveis `CHROME` e `PYTHON` do roteiro acima.

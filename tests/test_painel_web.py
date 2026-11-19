@@ -55,10 +55,17 @@ def test_painel_nao_serve_arquivos_de_fora_da_pasta(cliente):
         assert r.status_code == 404 or "Plataforma" not in r.text, rota
 
 
-def test_pagina_publica_de_verificacao_nao_usa_a_csp_do_painel(cliente):
-    # ela tem <style> inline; a CSP do painel quebraria o visual dela
+def test_pagina_publica_de_verificacao_tem_csp_sem_nada_inline(cliente):
     r = cliente.get("/verificar/cp_naoexiste")
-    assert "content-security-policy" not in r.headers
+    csp = r.headers["content-security-policy"]
+    for diretiva in ("default-src 'none'", "script-src 'self'", "style-src 'self'",
+                     "img-src 'self' data:", "frame-ancestors 'none'"):
+        assert diretiva in csp
+    assert "unsafe-inline" not in csp
+    assert not re.search(r"<style|\sstyle=|\son[a-z]+=", r.text)
+    assert not re.search(r"<script(?![^>]*\bsrc=)", r.text)
+    for arquivo in ("/painel/verificar.css", "/painel/js/imprimir.js"):
+        assert cliente.get(arquivo).status_code == 200
 
 
 # ---------- regras do código do painel (CSP e XSS) ----------

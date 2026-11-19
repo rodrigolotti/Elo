@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Annotated, Any, AsyncIterator, Literal
 from zoneinfo import ZoneInfo
 
+import segno
 from fastapi import Body, Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -567,14 +568,17 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None,
 
     @app.get("/verificar/{compromisso_id}", response_class=HTMLResponse,
              tags=["verificação"])
-    def pagina_verificacao(compromisso_id: str) -> HTMLResponse:
-        """Página pública, em português, com as 15 checagens e o resultado."""
+    def pagina_verificacao(compromisso_id: str, request: Request) -> HTMLResponse:
+        """Página pública, em português, com as 15 checagens, o resultado e um QR Code
+        que aponta para ela mesma (para conferir uma cópia impressa depois)."""
         with trava:
             relatorio = plat().verificar_compromisso(compromisso_id)
             topo = _resumo_topo(plat(), compromisso_id)
             resumo = _resumo(plat(), compromisso_id)
-        return HTMLResponse(_pagina(relatorio, topo, resumo),
-                            status_code=200 if _existe(relatorio) else 404)
+        endereco = _endereco_publico(request, compromisso_id)
+        return HTMLResponse(_pagina(relatorio, topo, resumo, endereco),
+                            status_code=200 if _existe(relatorio) else 404,
+                            headers=CABECALHOS_VERIFICACAO)
 
     return app
 
@@ -684,40 +688,40 @@ def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]
     return linhas
 
 
-_ESTILO = """
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;
-background:#f6f7f9;color:#1d2330}
-main{max-width:760px;margin:0 auto;padding:32px 20px 48px}
-h1{font-size:1.4rem;margin:0 0 4px}
-h2{font-size:1.1rem;margin:28px 0 10px}
-.id{font-family:ui-monospace,Consolas,monospace;color:#5b6475;margin:0 0 20px;
-word-break:break-all}
-.topo{border-radius:12px;padding:20px 22px;margin-bottom:8px}
-.valido{background:#e3f4e8;color:#14532d;border:1px solid #9fd5b0}
-.invalido{background:#fbe4e4;color:#7f1d1d;border:1px solid #eba9a9}
-.selo{font-weight:700;font-size:1rem;letter-spacing:.02em}
-.valor{font-size:2rem;font-weight:800;color:#1d2330;margin:10px 0 2px}
-.rota{font-size:1.1rem;color:#1d2330;margin-bottom:12px}
-.fatos{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0 0 12px;
-color:#1d2330}
-.fatos dt{color:#5b6475}.fatos dd{margin:0}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
-overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:24px}
-th,td{text-align:left;padding:10px 14px;border-bottom:1px solid #eceef2;
-vertical-align:top}
-th{background:#f0f2f5;font-size:.85rem;color:#5b6475}
-tr:last-child td{border-bottom:0}
-.n{color:#8a93a3;width:2em}
-.st{font-weight:700;white-space:nowrap;width:5em}
-.ok{color:#15803d}.falha{color:#b91c1c}
-.det{color:#5b6475;font-size:.9rem}
-.mono{font-family:ui-monospace,Consolas,monospace;word-break:break-all}
-footer{color:#5b6475;font-size:.85rem;line-height:1.5}
-"""
+# Página pública: sem estilo nem script inline (CSS e o botão de imprimir vêm de
+# /painel); o QR Code é uma imagem data: gerada aqui, sem serviço externo.
+CABECALHOS_VERIFICACAO = {
+    "Content-Security-Policy": "; ".join([
+        "default-src 'none'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    ]),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+def _endereco_publico(request: Request, compromisso_id: str) -> str:
+    """Endereço desta página para o QR Code. Em produção, ELO_URL_PUBLICA fixa o
+    domínio (ex.: https://elo.exemplo.com.br); sem ela, vale o endereço pelo qual
+    a página foi pedida."""
+    base = os.environ.get("ELO_URL_PUBLICA") or str(request.base_url)
+    return f"{base.rstrip('/')}/verificar/{compromisso_id}"
+
+
+def _qr_svg(texto: str) -> str:
+    """QR Code (correção M, margem de 4 módulos) como data URI SVG, na cor da marca."""
+    return segno.make(texto, error="m").svg_data_uri(
+        scale=1, border=4, dark="#0b2545", light="#ffffff", omitsize=True)
 
 
 def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
-            resumo: list[tuple[str, str]]) -> str:
+            resumo: list[tuple[str, str]], endereco: str) -> str:
     e = html.escape
     valido = relatorio.valido
     linhas = "".join(
@@ -746,6 +750,14 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
     else:
         prova = (f"{ok_total} de {total} checagens OK. Não confie nestes dados até "
                  "entender a falha mostrada abaixo.")
+    qr = "" if topo is None else (
+        '<div class="qr">'
+        f'<img src="{e(_qr_svg(endereco))}" width="168" height="168" '
+        'alt="QR Code com o endereço desta página de verificação">'
+        "<p>Aponte a câmera para conferir esta prova a qualquer momento.</p>"
+        f'<p class="endereco">{e(endereco)}</p>'
+        '<button type="button" class="imprimir">Imprimir</button>'
+        "</div>")
     dados_topo = "" if topo is None else (
         f'<div class="valor">{e(topo["valor"])}</div>'
         f'<div class="rota">{e(topo["rota"])}</div>'
@@ -759,18 +771,26 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<link rel="icon" href="data:,">
+<link rel="icon" href="/painel/logo.svg" type="image/svg+xml">
 <title>Verificação do compromisso {cid} · Elo</title>
-<style>{_ESTILO}</style>
+<link rel="stylesheet" href="/painel/verificar.css">
+<script type="module" src="/painel/js/imprimir.js"></script>
 </head>
 <body>
+<header class="topo-pagina"><div>
+<img src="/painel/logo.svg" alt="" width="30" height="20">
+<span class="marca">elo</span><span class="marca-sub">Verificação pública</span>
+</div></header>
 <main>
 <h1>Verificação do compromisso</h1>
 <p class="id">{cid}</p>
 <section class="topo {"valido" if valido else "invalido"}">
+<div>
 <div class="selo">{selo}</div>
 {dados_topo}
 <div class="det">{e(prova)}</div>
+</div>
+{qr}
 </section>
 <h2>A prova: {total} checagens independentes</h2>
 <table id="checagens">
@@ -782,7 +802,7 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
 <p>Todas as checagens são refeitas agora, a partir do registro de eventos com
 hashes encadeados. As assinaturas são Ed25519. O aceite do embarcador foi
 feito por link e é atestado pela plataforma, não assinado pelo embarcador.</p>
-<p><a href="/compromissos/{cid}/verificacao">Ver relatório em JSON</a></p>
+<p class="so-tela"><a href="/compromissos/{cid}/verificacao">Ver relatório em JSON</a></p>
 </footer>
 </main>
 </body>
