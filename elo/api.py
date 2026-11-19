@@ -338,6 +338,12 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None,
             with trava:
                 return agente_demo.simular(plat(), cnpj)
 
+        @app.post("/demo/limpar", tags=["demonstração"])
+        def limpar_demonstracao(cnpj: Logado) -> dict[str, Any]:
+            """Descarta as ofertas em aberto do agente simulado (o registro só cresce)."""
+            with trava:
+                return agente_demo.limpar(plat(), cnpj)
+
     # ----- sessão do painel -----
 
     @app.post("/sessoes/desafio", tags=["sessão"])

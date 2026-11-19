@@ -206,6 +206,8 @@ class Plataforma:
         self.aprovacoes: dict[str, dict[str, Any]] = {}
         self.recusas: dict[str, dict[str, Any]] = {}
         self.compromissos: dict[str, dict[str, Any]] = {}
+        # ofertas em aberto descartadas (hoje, só pela limpeza do modo demonstração)
+        self.descartadas: dict[str, dict[str, Any]] = {}
         self.token_aceite_hash: dict[str, str | None] = {}
         # o mandato já estava revogado quando a oferta entrou no registro?
         # (ordem do registro, protegida pela corrente de hashes; os horários
@@ -264,6 +266,11 @@ class Plataforma:
                 self.recusas[oferta_id] = p
                 self.seq_objeto[("recusa", oferta_id)] = seq
                 self.status_oferta[oferta_id] = "recusada"
+        elif tipo == "ofertas_descartadas":
+            for oferta_id in p["oferta_ids"]:
+                if self.status_oferta.get(oferta_id) in ("aguardando_aprovacao", "enviada"):
+                    self.status_oferta[oferta_id] = "descartada"
+                    self.descartadas[oferta_id] = p
         elif tipo == "compromisso_firmado":
             self.compromissos[p["id"]] = p
             oferta_id = self.ofertas_por_hash.get(p["oferta_hash"])
@@ -969,6 +976,20 @@ class Plataforma:
                 fechados += 1
         return {"cnpj": destinatario, "nome": nome, "fretes_fechados": fechados}
 
+    def descartar_ofertas_do_agente(self, cnpj: str, agente_id: str, motivo: str) -> list[str]:
+        """Descarta as ofertas ainda em aberto (aguardando decisão ou enviadas) de um
+        agente. Nada sai do registro: entra um evento com a lista exata das ofertas,
+        que deixam de aparecer e não podem mais ser aprovadas, recusadas nem aceitas."""
+        cnpj = self._org(cnpj)["cnpj"]
+        ids = [o["id"] for o in self.ofertas.values()
+               if o["emissor"]["cnpj"] == cnpj and o["emissor"]["agente_id"] == agente_id
+               and self.status_oferta[o["id"]] in ("aguardando_aprovacao", "enviada")]
+        if ids:
+            self._incluir("ofertas_descartadas", {
+                "tipo": "ofertas_descartadas", "cnpj": cnpj, "agente_id": agente_id,
+                "oferta_ids": ids, "motivo": motivo, "em": self._agora_iso()}, ids[0])
+        return ids
+
     def listar_ofertas(self, cnpj: str, status: str | None = None) -> list[dict[str, Any]]:
         cnpj = self._org(cnpj)["cnpj"]
         return [{"oferta": o,
@@ -979,7 +1000,7 @@ class Plataforma:
                  "aprovacao": self.aprovacoes.get(o["id"]),
                  "recusa": self.recusas.get(o["id"])}
                 for o in self.ofertas.values()
-                if o["emissor"]["cnpj"] == cnpj
+                if o["emissor"]["cnpj"] == cnpj and o["id"] not in self.descartadas
                 and (status is None or self.status_oferta[o["id"]] == status)]
 
     def listar_compromissos(self, cnpj: str) -> list[dict[str, Any]]:
@@ -1005,7 +1026,7 @@ class Plataforma:
                                  for cp in self.compromissos.values()}
         fretes = []
         for oferta in self.ofertas.values():
-            if oferta["emissor"]["cnpj"] != cnpj:
+            if oferta["emissor"]["cnpj"] != cnpj or oferta["id"] in self.descartadas:
                 continue
             status = self.status_oferta[oferta["id"]]
             atual = {"aceita": "fechado", "recusada": "recusado"}.get(status, "em-aberto")

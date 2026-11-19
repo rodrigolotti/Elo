@@ -83,7 +83,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata segno
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 415 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 476 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -401,7 +401,18 @@ o cadastro do **Agente de demonstração** (que roda no servidor, com a chave s�
 memória) e um mandato padrão (SP → PR, carga geral, até R$ 6.000,00 por frete, 30 dias).
 O servidor nunca assina pela organização. Depois, cada clique registra o pedido de um
 embarcador fictício e três ofertas de lotação (410 km, 5 eixos): uma dentro do mandato,
-uma acima do limite e uma abaixo do piso da ANTT.
+uma acima do limite e uma abaixo do piso da ANTT. Os valores e o peso da carga mudam a
+cada clique, sempre dentro dessas três faixas: dentro fica entre 105% e 140% do piso, sem
+passar do limite; acima fica entre 115% e 190% do limite; abaixo fica entre 35% e 80% do
+piso. Todos os valores são múltiplos de R$ 50.
+
+**"Limpar demonstração"**, ao lado do botão de simular, tira das telas as ofertas
+simuladas que ainda estão em aberto, para começar outra apresentação do zero. O registro
+só aceita acréscimos, então nada é apagado. Entra um evento `ofertas_descartadas` com a
+lista exata das ofertas. Elas saem de Aprovações, do Histórico e dos números da Visão
+geral, e não podem mais ser aprovadas, recusadas nem aceitas. Fretes já fechados não são
+tocados. O agente e o mandato de demonstração continuam, então dá para simular de novo
+sem assinar outra vez.
 
 Com o modo desligado (o padrão), as rotas `/demo/*` e o botão **não existem**: um teste
 confere isso. Não ligue esse modo num servidor de uso real.

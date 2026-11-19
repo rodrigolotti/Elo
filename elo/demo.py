@@ -12,10 +12,20 @@ mandato e da tabela da ANTT vigente:
 - uma dentro do mandato (acima do piso e dentro do limite);
 - uma acima do limite do mandato;
 - uma abaixo do piso mínimo da ANTT.
+
+Os valores (e o peso da carga) mudam a cada pedido, sempre dentro dessas três
+faixas, para a demonstração não repetir os mesmos números.
+
+"Limpar demonstração" descarta as ofertas do agente simulado que ainda estão em
+aberto. O registro só aceita acréscimos: nada é apagado; entra um evento
+"ofertas_descartadas" com a lista exata das ofertas, que saem das telas e não
+podem mais ser aprovadas nem aceitas. O agente e o mandato ficam, para simular
+de novo sem assinar outra vez.
 """
 
 from __future__ import annotations
 
+import random
 from datetime import date, timedelta, timezone
 from typing import Any
 
@@ -48,17 +58,37 @@ def _arredondar(centavos: int, para: int = 5_000) -> int:
     return -(-centavos // para) * para
 
 
+# faixas, em % (do piso ou do limite do mandato), de onde saem os valores de cada pedido
+FAIXA_DENTRO = (105, 140)   # do piso, sem passar do limite
+FAIXA_ACIMA = (115, 190)    # do limite do mandato
+FAIXA_ABAIXO = (35, 80)     # do piso
+
+
 class AgenteDemo:
-    def __init__(self) -> None:
+    def __init__(self, sorteio: random.Random | None = None) -> None:
         self.chave = ParDeChaves.gerar("agente-demonstracao#k1")
+        self.sorteio = sorteio or random.Random()
+
+    def _agente(self, p: Plataforma, cnpj: str) -> dict | None:
+        return next((a for a in p.agentes.values()
+                     if a["cnpj"] == cnpj and a["chave_publica"] == self.chave.publica_b64), None)
+
+    def limpar(self, p: Plataforma, cnpj: str) -> dict[str, Any]:
+        """Descarta as ofertas em aberto do agente simulado (nada é apagado do registro)."""
+        cnpj = p._org(cnpj)["cnpj"]
+        agente = self._agente(p, cnpj)
+        if agente is None:
+            return {"descartadas": 0}
+        ids = p.descartar_ofertas_do_agente(cnpj, agente["agente_id"],
+                                            "limpeza do modo demonstração")
+        return {"descartadas": len(ids)}
 
     def descricao(self) -> dict[str, Any]:
         return {"nome": NOME_AGENTE, "chave_id": self.chave.chave_id,
                 "chave_publica": self.chave.publica_b64, "limites_padrao": LIMITES_PADRAO}
 
     def _agente_e_mandato(self, p: Plataforma, cnpj: str) -> tuple[dict, dict]:
-        agente = next((a for a in p.agentes.values()
-                       if a["cnpj"] == cnpj and a["chave_publica"] == self.chave.publica_b64), None)
+        agente = self._agente(p, cnpj)
         if agente is None:
             raise ErroElo("prepare a demonstração antes: cadastre o agente de demonstração")
         agora = p._agora()
@@ -81,19 +111,23 @@ class AgenteDemo:
         if piso is None:
             raise ErroElo("sem piso da ANTT para a categoria do mandato: escolha carga geral")
         limite = limites["valor_max_centavos"]
-        dentro = min(limite, _arredondar(piso * 125 // 100))
-        if dentro < piso:
+        if limite < piso:
             raise ErroElo("o limite do mandato está abaixo do piso da ANTT para "
                           f"{DISTANCIA_KM} km: aumente o limite para simular")
+        sortear = lambda base, faixa: _arredondar(base * self.sorteio.randint(*faixa) // 100)
+        # dentro: entre o piso e o limite (arredondar para baixo no limite mantém >= piso)
+        dentro = max(piso, min(limite, sortear(piso, FAIXA_DENTRO)))
+        abaixo = min(sortear(piso, FAIXA_ABAIXO), (piso - 1) // 5_000 * 5_000)
         valores = [("dentro do mandato", dentro),
-                   ("acima do limite", _arredondar(limite * 3 // 2)),
-                   ("abaixo do piso da ANTT", _arredondar(piso * 45 // 100))]
+                   ("acima do limite", sortear(limite, FAIXA_ACIMA)),
+                   ("abaixo do piso da ANTT", abaixo)]
 
         cnpj_embarcador, nome = next((c, n) for c, n in EMBARCADORES if c != cnpj)
         origem, destino = limites["ufs_origem"][0], limites["ufs_destino"][0]
         carga = Carga(origem_cep=CEP_POR_UF.get(origem, "01001-000"), origem_uf=origem,
                       destino_cep=CEP_POR_UF.get(destino, "80010-000"), destino_uf=destino,
-                      peso_kg=3200, volume_litros=14500, tipo=tipo)
+                      peso_kg=self.sorteio.randrange(1_800, 9_001, 100),
+                      volume_litros=self.sorteio.randrange(8_000, 30_001, 500), tipo=tipo)
         pedido = p.registrar_pedido(cnpj_embarcador, "demonstracao", carga,
                                     "Pedido simulado no modo demonstração", nome)
         valida_ate = (p._agora() + timedelta(days=1)).astimezone(BRT).isoformat(timespec="seconds")

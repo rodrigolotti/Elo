@@ -55,8 +55,8 @@ h3 { font-size: .9rem; margin: 0 0 6px; }
 
 #topo { background: var(--superficie); border-bottom: 1px solid var(--borda); }
 .topo-dentro {
-  max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 64px;
-  display: flex; align-items: center; gap: 24px;
+  max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 64px;
+  display: flex; align-items: center; gap: 16px;
 }
 .marca { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--marca); flex: none; }
 .marca img { display: block; }
@@ -66,7 +66,7 @@ nav { display: flex; gap: 2px; flex: 1; min-width: 0; white-space: nowrap; overf
   scrollbar-width: none; align-self: stretch; }
 nav::-webkit-scrollbar { display: none; }
 nav a {
-  color: var(--suave); text-decoration: none; padding: 0 12px; font-weight: 500; font-size: .95rem;
+  color: var(--suave); text-decoration: none; padding: 0 10px; font-weight: 500; font-size: .95rem;
   border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 nav a:hover { color: var(--texto); }
@@ -79,6 +79,13 @@ nav a.ativo { color: var(--marca); font-weight: 700; border-bottom-color: var(--
 .quem-nome { font-weight: 600; font-size: .9rem; max-width: 190px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .quem-cnpj { display: none; }
+
+.botao-texto {
+  font: inherit; font-size: .85rem; font-weight: 600; color: var(--suave); background: none;
+  border: 0; padding: 6px 4px; cursor: pointer; white-space: nowrap; flex: none;
+}
+.botao-texto:hover { color: var(--marca); text-decoration: underline; }
+.botao-texto:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 6px; }
 
 /* ---------- conteúdo ---------- */
 

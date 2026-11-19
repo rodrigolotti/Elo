@@ -356,7 +356,8 @@ async function percorrerTelas(p, largura, altura, prefixo) {
       cortados: (() => {
         const nav = document.querySelector("nav").getBoundingClientRect();
         return [...document.querySelectorAll("nav a")]
-          .filter((a) => a.getBoundingClientRect().right > nav.right + 1).map((a) => a.textContent);
+          .filter((a) => a.getBoundingClientRect().right > nav.right + 1)
+          .map((a) => a.textContent + " (+" + Math.ceil(a.getBoundingClientRect().right - nav.right) + " px)");
       })() })`);
     if (m.largura > m.janela || m.vazando.length) {
       falhar(`${rota} em ${largura} px passa da borda: ${m.largura} px; ${JSON.stringify(m.vazando)}`);
@@ -926,8 +927,11 @@ async function roteiro() {
   await p2.aguardarTexto("Pedido simulado de Comercial Exemplo de Alimentos Ltda (fictícia): 3 ofertas. "
     + "1 foi direto ao embarcador e 2 aguardam a sua decisão.", 20000);
   await p2.aguardar("location.hash === '#/aprovacoes'");
-  await p2.aguardarTexto("Valor R$ 9.000,00 acima do limite de R$ 6.000,00");
-  await p2.aguardarTexto("R$ 1.857,20 abaixo do piso mínimo da ANTT: risco de multa e indenização.");
+  // os valores mudam a cada pedido; as faixas, não
+  await p2.aguardar(String.raw`/Valor R\$ [\d.]+,\d\d acima do limite de R\$ 6\.000,00/`
+    + ".test(document.body.innerText)");
+  await p2.aguardar(String.raw`/R\$ [\d.]+,\d\d abaixo do piso mínimo da ANTT: risco de multa e indenização\./`
+    + ".test(document.body.innerText)");
   await p2.capturar("demonstracao-aprovacoes");
   const cartoesAntes = await p2.avaliar("document.querySelectorAll('article.cartao').length");
   await p2.clicar("Simular pedido de cotação");
@@ -946,6 +950,22 @@ async function roteiro() {
   await p2.cdp("Emulation.setDeviceMetricsOverride",
     { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   ok("celular (390 px): todas as telas sem rolagem lateral, menu numa linha, sem botão de demonstração");
+
+  await p2.avaliar("location.hash = '#/aprovacoes'");
+  await p2.clicar("Limpar demonstração");
+  await p2.aguardar("document.querySelector('dialog').open");
+  await p2.clicar("Limpar demonstração", "document.querySelector('dialog')");
+  await p2.aguardarTexto("Demonstração limpa: 6 ofertas simuladas descartadas.", 20000);
+  // sobram só as ofertas que não são da demonstração, e o contador do menu bate com elas
+  await p2.aguardar(`(() => {
+    const cartoes = [...document.querySelectorAll("article.cartao")];
+    const contador = document.querySelector('nav a[href="#/aprovacoes"] .contador')?.textContent ?? "0";
+    return !document.querySelector("main .carregando") && cartoes.length > 0
+      && !cartoes.some((c) => c.textContent.includes("Agente de demonstração"))
+      && Number(contador) === cartoes.length;
+  })()`);
+  await p2.capturar("demonstracao-limpa");
+  ok("limpar demonstração: 6 ofertas simuladas descartadas; ficaram só as que não são da demonstração");
 
   console.log("13. Conferências finais");
   const corpos = [...p.corpos, ...p2.corpos];

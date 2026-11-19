@@ -133,6 +133,30 @@ async function simularPedido(botao) {
   });
 }
 
+/** Descarta as ofertas simuladas em aberto (o registro só cresce: nada é apagado). */
+async function limparDemonstracao(botao) {
+  const ok = await confirmar({
+    titulo: "Limpar demonstração",
+    corpo: ["As ofertas simuladas que ainda estão em aberto saem das telas e não poderão "
+      + "mais ser aprovadas nem aceitas. Os fretes já fechados continuam.",
+    "Nada é apagado: o registro guarda que essas ofertas foram descartadas. O agente de "
+      + "demonstração continua preparado para simular de novo."],
+    botao: "Limpar demonstração",
+  });
+  if (!ok) return;
+  await executando(botao, async () => {
+    try {
+      const { descartadas } = await api.enviar("/demo/limpar", {});
+      avisar(descartadas === 0 ? "Nenhuma oferta simulada em aberto para limpar."
+        : `Demonstração limpa: ${contar(descartadas, "oferta simulada descartada",
+          "ofertas simuladas descartadas")}.`);
+      recarregar();
+    } catch (erro) {
+      avisarErro(erro);
+    }
+  });
+}
+
 function desenharTopo(caminho, pendentes, semRecuperacao) {
   const atual = api.sessao();
   const emPasso = passoObrigatorio !== null;
@@ -155,6 +179,10 @@ function desenharTopo(caminho, pendentes, semRecuperacao) {
       type: "button", class: "botao secundario pequeno so-desktop",
       onclick: (e) => simularPedido(e.currentTarget),
     }, "Simular pedido de cotação") : null,
+    atual && !emPasso && demo ? h("button", {
+      type: "button", class: "botao-texto pequeno so-desktop",
+      onclick: (e) => limparDemonstracao(e.currentTarget),
+    }, "Limpar demonstração") : null,
     atual && !emPasso ? h("div", { class: "quem" },
       h("button", { type: "button", class: "botao secundario pequeno", onclick: async () => {
         await api.sair().catch(() => {});
