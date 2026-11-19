@@ -378,6 +378,16 @@ def criar_app(plataforma: Plataforma | None = None, estimador: Any = None,
             itens = plat().listar_ofertas(cnpj, status)
         return [{**item, "frete": _frete(item, app.state.estimador)} for item in itens]
 
+    @app.get("/visao-geral", tags=["consulta"])
+    def visao_geral(cnpj: Logado) -> dict[str, Any]:
+        """Resumo do mês e as ofertas aguardando decisão (com o bloco "frete")."""
+        with trava:
+            resumo = plat().visao_geral(cnpj)
+            itens = plat().listar_ofertas(cnpj, "aguardando_aprovacao")
+        resumo["aguardando"]["itens"] = [{**i, "frete": _frete(i, app.state.estimador)}
+                                         for i in itens]
+        return resumo
+
     @app.get("/compromissos", tags=["consulta"])
     def listar_compromissos(cnpj: Logado) -> list[dict[str, Any]]:
         with trava:

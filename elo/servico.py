@@ -26,6 +26,7 @@ import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Callable
 
 from . import VERSAO_PROTOCOLO, versao_ao_menos
@@ -39,7 +40,9 @@ def _descrever_tipo(tipo: str) -> dict[str, Any]:
     """Para exibir: nome da categoria da ANTT, ou o texto antigo fora da lista."""
     return {"tipo": tipo, "nome": nome_tipo_carga(tipo),
             "na_lista": normalizar_tipo_carga(tipo) is not None}
-from .mandato import abaixo_do_piso, violacoes
+from .mandato import abaixo_do_piso, piso_da_oferta, violacoes
+
+_BRASILIA = ZoneInfo("America/Sao_Paulo")
 
 MINIMO_JUSTIFICATIVA = 10
 """Caracteres mínimos da justificativa para aprovar frete abaixo do piso."""
@@ -989,6 +992,50 @@ class Plataforma:
                               "embarcador": self._embarcador(cnpj, oferta),
                               "verificacao": f"/verificar/{cp['id']}"})
         return saida
+
+    def visao_geral(self, cnpj: str) -> dict[str, Any]:
+        """Resumo do mês corrente (horário de Brasília) para a tela inicial do painel.
+
+        - fechados: compromissos aceitos no mês (quantidade e valor);
+        - aguardando: ofertas esperando decisão (de qualquer mês);
+        - barradas abaixo do piso: ofertas emitidas no mês com o motivo "abaixo do
+          piso da ANTT" e quanto, somadas, ficariam abaixo do mínimo;
+        - embarcadores: fretes fechados no mês com cada um.
+        """
+        cnpj = self._org(cnpj)["cnpj"]
+        agora = self._agora().astimezone(_BRASILIA)
+
+        def no_mes(iso: str) -> bool:
+            momento = ler_momento(iso).astimezone(_BRASILIA)
+            return (momento.year, momento.month) == (agora.year, agora.month)
+
+        fechados = [c for c in self.listar_compromissos(cnpj)
+                    if no_mes(c["compromisso"]["aceite"]["em"])]
+        aguardando = self.listar_ofertas(cnpj, "aguardando_aprovacao")
+        barradas, abaixo_total = 0, 0
+        for item in self.listar_ofertas(cnpj):
+            oferta = item["oferta"]
+            if no_mes(oferta["emitida_em"]) and abaixo_do_piso(item["violacoes"]):
+                piso = piso_da_oferta(Carga(**oferta["carga"]), Condicoes(**oferta["condicoes"]),
+                                      ler_momento(oferta["emitida_em"]))
+                barradas += 1
+                if piso is not None:
+                    abaixo_total += piso["piso_centavos"] - oferta["condicoes"]["valor_centavos"]
+        embarcadores: dict[str, dict[str, Any]] = {}
+        for c in fechados:
+            e = c["embarcador"]
+            linha = embarcadores.setdefault(e["cnpj"], {"cnpj": e["cnpj"], "nome": e["nome"],
+                                                        "fretes": 0, "total_centavos": 0})
+            linha["fretes"] += 1
+            linha["total_centavos"] += c["oferta"]["condicoes"]["valor_centavos"]
+        valor = lambda itens: sum(i["oferta"]["condicoes"]["valor_centavos"] for i in itens)
+        return {
+            "mes": f"{agora.year:04d}-{agora.month:02d}",
+            "fechados": {"quantidade": len(fechados), "total_centavos": valor(fechados)},
+            "aguardando": {"quantidade": len(aguardando), "total_centavos": valor(aguardando)},
+            "barradas_piso": {"quantidade": barradas, "abaixo_do_minimo_centavos": abaixo_total},
+            "embarcadores": sorted(embarcadores.values(), key=lambda e: -e["total_centavos"]),
+        }
 
     # ---------- auxiliares ----------
 

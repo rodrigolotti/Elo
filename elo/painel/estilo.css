@@ -223,3 +223,42 @@ td.falha { color: var(--ruim); font-weight: 700; }
 
 /* botão de demonstração: só no desktop */
 @media (max-width: 640px) { .so-desktop { display: none !important; } }
+
+/* ---------- Visão geral (direção A: sóbria, cor só para status) ---------- */
+
+:root { --status-ok: #15803d; --status-atencao: #b45309; --status-risco: #b91c1c; }
+.vg-mes { text-transform: uppercase; letter-spacing: .04em; font-weight: 600; color: var(--suave); font-size: .9rem; }
+.visao-geral h1 { font-size: 2.1rem; letter-spacing: -.03em; margin: 4px 0 32px; }
+.vg-numeros { display: grid; grid-template-columns: 1.4fr 1fr 1fr; border-top: 2px solid var(--texto); }
+.vg-numero { padding: 22px 28px 26px 0; }
+.vg-numero + .vg-numero { padding-left: 28px; border-left: 1px solid var(--linha); }
+.vg-rotulo { font-size: .9rem; color: var(--suave); font-weight: 600; }
+.vg-grande { font-size: 2.6rem; font-weight: 800; letter-spacing: -.04em; margin: 8px 0 4px; }
+.vg-grande.atencao, .vg-status.atencao { color: var(--status-atencao); }
+.vg-grande.risco, .vg-status.risco { color: var(--status-risco); }
+.vg-detalhe { color: var(--suave); max-width: 34ch; }
+.vg-duas { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 48px; margin-top: 44px; }
+.vg-secao h2 { font-size: 1.05rem; margin: 0 0 6px; }
+.vg-linha { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 18px; align-items: baseline;
+  padding: 14px 0; border-top: 1px solid var(--linha); color: inherit; text-decoration: none; }
+a.vg-linha:hover .vg-rota, a.vg-linha:focus-visible .vg-rota { text-decoration: underline; }
+.vg-valor { font-weight: 800; font-size: 1.1rem; white-space: nowrap; }
+.vg-quem { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vg-rota { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vg-embarcador { color: var(--suave); font-size: .9rem; }
+.vg-status { font-weight: 600; font-size: .9rem; text-align: right; }
+.vg-embarcadores { grid-template-columns: minmax(0, 1fr) auto auto; }
+.vg-total { color: var(--suave); white-space: nowrap; }
+.vg-vazio { color: var(--suave); padding: 14px 0; border-top: 1px solid var(--linha); margin: 0; }
+@media (max-width: 640px) {
+  .visao-geral h1 { font-size: 1.7rem; margin-bottom: 20px; }
+  .vg-numeros { grid-template-columns: 1fr; }
+  .vg-numero, .vg-numero + .vg-numero { padding: 18px 0; border-left: 0; border-top: 1px solid var(--linha); }
+  .vg-numero:first-child { border-top: 0; }
+  .vg-grande { font-size: 2.2rem; }
+  .vg-duas { grid-template-columns: 1fr; gap: 32px; margin-top: 32px; }
+  .vg-linha { grid-template-columns: 1fr; gap: 4px; }
+  .vg-status { text-align: left; }
+  .vg-embarcadores { grid-template-columns: 1fr auto; }
+  .vg-embarcadores .vg-total { grid-column: 1 / -1; }
+}

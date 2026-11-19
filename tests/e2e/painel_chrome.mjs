@@ -636,9 +636,28 @@ async function roteiro() {
   if (antigo.status !== 401) falhar("token antigo deveria ter sido encerrado");
   await p.capturar("entrar-com-chave");
   await p.clicar("Entrar");
-  await p.aguardar("location.hash === '#/aprovacoes'");
+  await p.aguardar("location.hash === '#/visao-geral'");
+  ok("saiu (token encerrado) e entrou de novo assinando o desafio; abre na Visão geral");
+  for (const trecho of ["Fretes fechados no mês", "R$ 13.850,00", "2 fretes, todos com prova verificável",
+    "Aguardando sua decisão", "R$ 1.000,00 em ofertas", "Fretes barrados abaixo do piso",
+    "Iriam sair R$ 3.071,76 abaixo do mínimo da ANTT. Não saíram sem a sua decisão.",
+    "R$ 3.071,76 abaixo do piso da ANTT", "Comercial Exemplo de Alimentos Ltda (fictícia)",
+    "Fretes fechados por embarcador"]) {
+    await p.aguardarTexto(trecho);
+  }
+  const linhaPendente = await p.avaliar(`(() => {
+    const l = document.querySelector("a.vg-linha");
+    return { rota: l.querySelector(".vg-rota").textContent,
+             embarcador: l.querySelector(".vg-embarcador").textContent };
+  })()`);
+  if (linhaPendente.rota !== "SP → PR"
+      || linhaPendente.embarcador !== "Comercial Exemplo de Alimentos Ltda (fictícia)") {
+    falhar(`linha aguardando: ${JSON.stringify(linhaPendente)}`);
+  }
+  await p.capturar("visao-geral");
+  ok("Visão geral: fechados no mês, aguardando, barrados abaixo do piso e por embarcador");
+  await p.menu("/aprovacoes");
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
-  ok("saiu (token encerrado) e entrou de novo assinando o desafio");
   await p.aguardarTexto("2 fretes já fechados com ele");
   ok("depois de 2 aceites, a oferta nova mostra '2 fretes já fechados com ele'");
   await p.aguardarTexto("R$ 3.071,76 abaixo do piso mínimo da ANTT: risco de multa e indenização.");

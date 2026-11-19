@@ -11,6 +11,7 @@ import {
   apagarChave, guardarChave, listarChaves, pedirArmazenamentoPersistente,
 } from "./cofre.js";
 import { h, limpar } from "./dom.js";
+import { telaVisaoGeral } from "./visao.js";
 import {
   avisar, avisarErro, cabecalho, campo, confirmar, dados, executando, mono, vazio,
 } from "./ui.js";
@@ -31,6 +32,7 @@ function responsavelSalvo() {
 // ---------- topo e navegação ----------
 
 const MENU = [
+  ["/visao-geral", "Visão geral"],
   ["/aprovacoes", "Aprovações"],
   ["/agentes", "Agentes"],
   ["/mandatos", "Mandatos"],
@@ -131,7 +133,7 @@ function desenharTopo(caminho, pendentes, semRecuperacao) {
   const atual = api.sessao();
   const emPasso = passoObrigatorio !== null;
   limpar(topo).append(h("div", { class: "topo-dentro" },
-    h("a", { class: "marca", href: atual ? "#/aprovacoes" : "#/entrar" },
+    h("a", { class: "marca", href: atual ? "#/visao-geral" : "#/entrar" },
       h("span", { class: "marca-elo" }, "Elo"),
       atual && !emPasso ? null : h("span", { class: "marca-sub" },
         emPasso ? "Cadastro: passo 2 de 2" : "Painel da transportadora")),
@@ -159,6 +161,7 @@ function desenharTopo(caminho, pendentes, semRecuperacao) {
 }
 
 const ROTAS = {
+  "/visao-geral": telaVisaoGeral,
   "/entrar": telaEntrar,
   "/cadastro": telaCadastro,
   "/aprovacoes": telaAprovacoes,
@@ -189,7 +192,7 @@ async function navegar() {
   }
   const minha = ++navegacao;
   const logado = api.sessao() !== null;
-  const caminho = location.hash.slice(1) || (logado ? "/aprovacoes" : "/entrar");
+  const caminho = location.hash.slice(1) || (logado ? "/visao-geral" : "/entrar");
   if (logado && caminho === "/cadastro") {
     // já cadastrada: se faltar a recuperação (ex.: F5 no passo 2), retoma o passo
     try {
@@ -199,7 +202,7 @@ async function navegar() {
         passo2DoCadastro(await pedirArmazenamentoPersistente(), true);
         return;
       }
-      location.hash = "#/aprovacoes";
+      location.hash = "#/visao-geral";
     } catch (erro) {
       avisarErro(erro);
     }
@@ -265,7 +268,7 @@ async function telaEntrar() {
       limpar(erro);
       try {
         await api.entrar(r);
-        location.hash = "#/aprovacoes";
+        location.hash = "#/visao-geral";
       } catch (e) {
         erro.append(h("div", { class: "caixa erro", role: "alert" }, mensagemChaveAntiga(e)));
       }
