@@ -92,16 +92,31 @@ footer { color: var(--suave); font-size: .85rem; }
   th, td { padding: 8px 10px; }
 }
 
-/* Impressão: uma folha para arquivar junto da nota, com o QR para conferir depois. */
+/* Impressão em A4 (182 mm úteis com as margens): uma folha para arquivar junto da
+   nota, com o QR e o endereço inteiros e a coluna Resultado sempre dentro da página. */
+@page { size: A4; margin: 14mm; }
 @media print {
-  @page { margin: 14mm; }
-  body { font-size: 10.5pt; }
+  /* base no html: tudo que usa rem (detalhes, aviso) encolhe junto */
+  html { font-size: 9.5pt; }
+  body { line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .topo-pagina div, main { max-width: none; padding-left: 0; padding-right: 0; }
-  main { padding-top: 16px; padding-bottom: 0; }
+  .topo-pagina div { height: 40px; }
+  main { padding-top: 12px; padding-bottom: 0; }
+  h1 { font-size: 16pt; }
+  h2 { font-size: 11pt; margin: 18px 0 8px; break-after: avoid; }
+  .id { margin-bottom: 12px; }
   .imprimir, .so-tela { display: none; }
-  .topo { break-inside: avoid; }
+  .topo { break-inside: avoid; grid-template-columns: minmax(0, 1fr) 40mm; gap: 6px 18px; padding: 14px 16px; }
+  .qr { width: 40mm; }
+  .qr img { width: 36mm; height: 36mm; }
+  .qr .endereco { font-size: 6.5pt; overflow-wrap: anywhere; }
+  .valor { font-size: 20pt; }
+  /* larguras fixas: a coluna Resultado nunca é empurrada para fora da folha */
+  table { table-layout: fixed; }
+  #checagens .n { width: 11mm; white-space: nowrap; overflow-wrap: normal; }
+  #checagens .st { width: 20mm; }
+  th, td { padding: 5px 8px; overflow-wrap: anywhere; }
+  .detalhes th { width: 38mm; }
   tr { break-inside: avoid; }
-  h2 { break-after: avoid; }
   a { color: inherit; text-decoration: none; }
-  .valor { font-size: 22pt; }
 }

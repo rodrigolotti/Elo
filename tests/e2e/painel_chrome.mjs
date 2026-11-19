@@ -702,15 +702,34 @@ async function roteiro() {
     falhar(`estilo da página de verificação não carregou (CSP?): ${JSON.stringify(qr)}`);
   }
   await p.capturar("verificacao");
+  // impressão em A4: 210 mm − 2 × 14 mm de margem = 182 mm úteis ≈ 688 px a 96 dpi
   await p.cdp("Emulation.setEmulatedMedia", { media: "print" });
-  const impressao = await p.avaliar(`({
-    botao: getComputedStyle(document.querySelector(".imprimir")).display,
-    qr: getComputedStyle(document.querySelector(".qr img")).display })`);
-  if (impressao.botao !== "none" || impressao.qr === "none") {
-    falhar(`versão de impressão: ${JSON.stringify(impressao)}`);
+  await p.cdp("Emulation.setDeviceMetricsOverride", { width: 688, height: 1040, deviceScaleFactor: 1, mobile: false });
+  await esperar(200);
+  const impressao = await p.avaliar(`(() => {
+    const dentro = (el) => { const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= 688.5; };
+    const qr = document.querySelector(".qr img").getBoundingClientRect();
+    return {
+      botao: getComputedStyle(document.querySelector(".imprimir")).display,
+      qr: qr.width > 100 && qr.left >= 0 && qr.right <= 688.5,
+      endereco: dentro(document.querySelector(".qr .endereco")),
+      resultado: [...document.querySelectorAll("#checagens .st")].every(dentro),
+      largura: document.documentElement.scrollWidth,
+      fora: [...document.querySelectorAll("main *")].filter((e) => !dentro(e) && e.getBoundingClientRect().width)
+        .slice(0, 3).map((e) => e.tagName + "." + e.className),
+    };
+  })()`);
+  if (impressao.botao !== "none" || !impressao.qr || !impressao.endereco || !impressao.resultado
+      || impressao.largura > 688 || impressao.fora.length) {
+    falhar(`versão de impressão em A4: ${JSON.stringify(impressao)}`);
   }
-  await p.capturar("verificacao-impressao");
+  await p.capturar("verificacao-impressao-a4");
+  const pdf = await p.cdp("Page.printToPDF", { preferCSSPageSize: true, printBackground: true });
+  const paginasPdf = (Buffer.from(pdf.data, "base64").toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  writeFileSync(join(CAPTURAS, "verificacao-a4.pdf"), Buffer.from(pdf.data, "base64"));
+  if (paginasPdf < 1 || paginasPdf > 2) falhar(`PDF A4 com ${paginasPdf} páginas (esperado 1 ou 2)`);
   await p.cdp("Emulation.setEmulatedMedia", { media: "" });
+  await p.cdp("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   await p.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await esperar(200);
   const estreita = await p.avaliar("document.documentElement.scrollWidth");
@@ -720,7 +739,8 @@ async function roteiro() {
   await p.ir(`${BASE}/painel/#/mandatos`);
   ok("2 compromissos, links certos, 15 de 15 checagens OK");
   ok("histórico: linha do tempo pedido → oferta → aprovação → aceite em Brasília; filtro de recusados");
-  ok("/verificar: CSP sem nada inline, QR Code apontando para a própria página, impressão sem o botão, 390 px");
+  ok("/verificar: CSP sem nada inline, QR Code apontando para a própria página, aviso de endereço local, 390 px");
+  ok("/verificar impressa em A4: QR, endereço e coluna Resultado dentro da folha; PDF gerado");
 
   console.log("8. Revogação de mandato");
   await p.aguardarTexto("Revogar mandato");

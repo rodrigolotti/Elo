@@ -577,6 +577,8 @@ def test_versao_de_impressao():
     impressao = css[css.index("@media print"):]
     assert ".imprimir" in impressao and "display: none" in impressao
     assert "break-inside: avoid" in impressao
+    assert "@page { size: A4; margin: 14mm; }" in css
+    assert "table-layout: fixed" in impressao   # coluna Resultado não sai da folha
     js = (PASTA_PAINEL / "js" / "imprimir.js").read_text(encoding="utf-8")
     assert "window.print()" in js
 

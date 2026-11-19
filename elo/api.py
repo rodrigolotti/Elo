@@ -757,7 +757,7 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
     tabela_resumo = ""
     if resumo:
         tabela_resumo = (
-            '<h2>Detalhes do que foi combinado</h2><table>'
+            '<h2>Detalhes do que foi combinado</h2><table class="detalhes">'
             + "".join(f'<tr><th>{e(k)}</th><td class="{"mono" if k.startswith("Hash") else ""}">'
                       f'{e(v)}</td></tr>' for k, v in resumo)
             + "</table>")
