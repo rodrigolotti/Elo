@@ -41,7 +41,7 @@ export async function telaVisaoGeral() {
   const embarcadores = v.embarcadores.length === 0
     ? h("p", { class: "vg-vazio" }, "Nenhum frete fechado ainda neste mês.")
     : v.embarcadores.map((e) => h("div", { class: "vg-linha vg-embarcadores" },
-      h("span", { class: "vg-quem" }, h("span", { class: "vg-rota" }, e.nome ?? e.cnpj)),
+      h("span", { class: "vg-quem" }, h("span", { class: "vg-nome" }, e.nome ?? e.cnpj)),
       h("span", { class: "vg-valor" }, contar(e.fretes, "frete", "fretes")),
       h("span", { class: "vg-total" }, reais(e.total_centavos))));
 

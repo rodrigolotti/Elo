@@ -384,6 +384,11 @@ async function percorrerTelas(p, largura, altura, prefixo) {
         return s.indexOf(false) !== -1 && s.lastIndexOf(true) > s.indexOf(false);
       }).length`);
       if (fora) falhar(`Visão geral: ${fora} oferta(s) com motivo grave depois de um mais leve`);
+      // nenhum texto cortado com reticências (nome do embarcador, rota)
+      const cortado = await p.avaliar(`[...document.querySelectorAll(".visao-geral .vg-linha *")]
+        .filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === "ellipsis")
+        .map((e) => e.textContent)`);
+      if (cortado.length) falhar(`Visão geral em ${largura} px corta texto: ${JSON.stringify(cortado)}`);
     }
     await p.capturar(`${prefixo}-${rota.slice(1)}`);
   }
