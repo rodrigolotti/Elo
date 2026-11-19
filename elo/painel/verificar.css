@@ -81,6 +81,7 @@ tr:last-child td, tr:last-child th { border-bottom: 0; }
 .falha { color: var(--risco); }
 .det { color: var(--suave); font-size: .9rem; }
 .mono { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.cnpj { white-space: nowrap; }
 footer { color: var(--suave); font-size: .85rem; }
 
 @media (max-width: 640px) {

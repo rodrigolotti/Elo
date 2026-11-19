@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 import demo_api
 from conftest import CNPJ_EMBARC, CNPJ_TRANSP, cnpj_ficticio
-from elo.api import criar_app
+from elo.api import PASTA_PAINEL as PASTA_PAINEL_VERIFICAR, criar_app
 from elo.chaves import ParDeChaves
 from elo.registro import Registro
 from elo.servico import CHECAGENS, Plataforma
@@ -513,7 +513,10 @@ def test_pagina_mostra_resumo_para_o_embarcador_antes_da_prova(api):
     topo = texto[texto.index('<section class="topo valido">'):texto.index("</section>")]
     assert '<div class="valor">R$ 4.850,00</div>' in topo
     assert "SP (00000-000) → PR (11111-111)" in topo
-    assert f"Transportadora Fictícia Ltda ({CNPJ_TRANSP})" in topo
+    assert f'Transportadora Fictícia Ltda (<span class="cnpj">{CNPJ_TRANSP}</span>)' in topo
+    # pedido sem nome do embarcador: só o CNPJ, que não quebra de linha
+    assert f'<dt>Embarcador</dt><dd><span class="cnpj">{CNPJ_EMBARC}</span></dd>' in topo
+    assert not re.search(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}(?!</span>)", texto)
     assert re.search(r"<dt>Fechado em</dt><dd>\d{2}/\d{2}/\d{4} às \d{2}:\d{2} "
                      r"\(horário de Brasília\)</dd>", topo)
     assert "A prova está logo abaixo" in topo
@@ -602,3 +605,18 @@ def test_url_publica_invalida_impede_subir(monkeypatch, valor):
     monkeypatch.setenv("ELO_URL_PUBLICA", valor)
     with pytest.raises(ValueError, match="ELO_URL_PUBLICA inválida"):
         criar_app()
+
+
+def test_pagina_mostra_o_nome_do_embarcador_junto_do_cnpj(api):
+    r = api["cliente"].post("/pedidos", json={"cnpj_solicitante": CNPJ_EMBARC, "canal": "email",
+                                              "carga": CARGA,
+                                              "nome_solicitante": "Comercial Exemplo Ltda"})
+    api["pedido_id"] = r.json()["id"]
+    cp_id = fluxo_ate_compromisso(api)
+    texto = api["cliente"].get(f"/verificar/{cp_id}").text
+    junto = f'Comercial Exemplo Ltda (<span class="cnpj">{CNPJ_EMBARC}</span>)'
+    topo = texto[texto.index('<section class="topo'):texto.index("</section>")]
+    assert f"<dt>Embarcador</dt><dd>{junto}</dd>" in topo
+    assert f"<th>Embarcador</th><td>{junto}</td>" in texto.replace('<td class="">', "<td>")
+    css = (PASTA_PAINEL_VERIFICAR / "verificar.css").read_text(encoding="utf-8")
+    assert ".cnpj { white-space: nowrap; }" in css

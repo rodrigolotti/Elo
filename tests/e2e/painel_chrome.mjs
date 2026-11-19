@@ -712,6 +712,10 @@ async function roteiro() {
   if (qr.css !== "grid" || !qr.fonte.startsWith('"Inter"') && !qr.fonte.startsWith("Inter")) {
     falhar(`estilo da página de verificação não carregou (CSP?): ${JSON.stringify(qr)}`);
   }
+  await p.aguardarTexto("Comercial Exemplo de Alimentos Ltda (fictícia) (22.333.444/0001-81)");
+  const cnpjsQuebrados = await p.avaliar(`[...document.querySelectorAll(".cnpj")]
+    .filter((c) => c.getClientRects().length > 1).map((c) => c.textContent)`);
+  if (cnpjsQuebrados.length) falhar(`CNPJ quebrado em duas linhas: ${JSON.stringify(cnpjsQuebrados)}`);
   await p.capturar("verificacao");
   // impressão em A4: 210 mm − 2 × 14 mm de margem = 182 mm úteis ≈ 688 px a 96 dpi
   await p.cdp("Emulation.setEmulatedMedia", { media: "print" });
@@ -743,6 +747,9 @@ async function roteiro() {
   await p.cdp("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   await p.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await esperar(200);
+  const cnpjsQuebrados390 = await p.avaliar(`[...document.querySelectorAll(".cnpj")]
+    .filter((c) => c.getClientRects().length > 1).map((c) => c.textContent)`);
+  if (cnpjsQuebrados390.length) falhar(`CNPJ quebrado em duas linhas em 390 px: ${JSON.stringify(cnpjsQuebrados390)}`);
   const estreita = await p.avaliar("document.documentElement.scrollWidth");
   if (estreita > 390) falhar(`/verificar rola para os lados em 390 px (${estreita} px)`);
   await p.capturar("celular-verificacao");

@@ -656,12 +656,18 @@ def _resumo_topo(plataforma: Plataforma, compromisso_id: str) -> dict[str, str] 
     org = plataforma.organizacoes.get(cnpj)
     carga = oferta["carga"]
     return {
+        "embarcador": _nome_e_cnpj(plataforma._embarcador(cnpj, oferta)["nome"],
+                                   cp["aceite"]["cnpj"]),
         "valor": reais(oferta["condicoes"]["valor_centavos"]),
         "rota": f"{carga['origem_uf']} ({carga['origem_cep']}) → "
                 f"{carga['destino_uf']} ({carga['destino_cep']})",
-        "transportadora": f"{org['razao_social']} ({cnpj})" if org else cnpj,
+        "transportadora": _nome_e_cnpj(org["razao_social"] if org else None, cnpj),
         "fechado_em": _em_brasilia(cp["aceite"]["em"]),
     }
+
+
+def _nome_e_cnpj(nome: str | None, cnpj: str) -> str:
+    return f"{nome} ({cnpj})" if nome else cnpj
 
 
 def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]]:
@@ -677,10 +683,12 @@ def _resumo(plataforma: Plataforma, compromisso_id: str) -> list[tuple[str, str]
     oferta = plataforma.ofertas.get(oferta_id) if oferta_id else None
     if oferta is not None:
         cnpj = oferta["emissor"]["cnpj"]
+        linhas[1] = ("Embarcador", _nome_e_cnpj(plataforma._embarcador(cnpj, oferta)["nome"],
+                                                cp["aceite"]["cnpj"]))
         org = plataforma.organizacoes.get(cnpj)
         carga, cond = oferta["carga"], oferta["condicoes"]
         linhas = [
-            ("Transportadora", f"{org['razao_social']} ({cnpj})" if org else cnpj),
+            ("Transportadora", _nome_e_cnpj(org["razao_social"] if org else None, cnpj)),
             *linhas,
             ("Oferta", oferta["id"]),
             ("Valor", reais(cond["valor_centavos"])),
@@ -748,13 +756,22 @@ def _qr_svg(texto: str) -> str:
         scale=1, border=4, dark="#0b2545", light="#ffffff", omitsize=True)
 
 
+_CNPJ = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
+
+
+def _texto_html(texto: str) -> str:
+    """Escapa o texto e põe cada CNPJ num <span class="cnpj"> (sem quebra de linha)."""
+    return _CNPJ.sub(lambda m: f'<span class="cnpj">{m.group()}</span>', html.escape(texto))
+
+
 def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
             resumo: list[tuple[str, str]], endereco: str) -> str:
     e = html.escape
+    t = _texto_html
     valido = relatorio.valido
     linhas = "".join(
         f'<tr><td class="n">{i}</td><td>{e(v.nome)}'
-        + (f'<div class="det">{e(_datas_em_brasilia(v.detalhe))}</div>'
+        + (f'<div class="det">{t(_datas_em_brasilia(v.detalhe))}</div>'
            if v.detalhe else "")
         + f'</td><td class="st {"ok" if v.ok else "falha"}">'
           f'{"OK" if v.ok else "FALHA"}</td></tr>'
@@ -765,7 +782,7 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
         tabela_resumo = (
             '<h2>Detalhes do que foi combinado</h2><table class="detalhes">'
             + "".join(f'<tr><th>{e(k)}</th><td class="{"mono" if k.startswith("Hash") else ""}">'
-                      f'{e(v)}</td></tr>' for k, v in resumo)
+                      f'{t(v)}</td></tr>' for k, v in resumo)
             + "</table>")
     ok_total = sum(v.ok for v in relatorio.verificacoes)
     total = len(relatorio.verificacoes)
@@ -793,7 +810,8 @@ def _pagina(relatorio: Relatorio, topo: dict[str, str] | None,
         f'<div class="valor">{e(topo["valor"])}</div>'
         f'<div class="rota">{e(topo["rota"])}</div>'
         '<dl class="fatos">'
-        f'<dt>Transportadora</dt><dd>{e(topo["transportadora"])}</dd>'
+        f'<dt>Transportadora</dt><dd>{t(topo["transportadora"])}</dd>'
+        f'<dt>Embarcador</dt><dd>{t(topo["embarcador"])}</dd>'
         f'<dt>Fechado em</dt><dd>{e(topo["fechado_em"])}</dd>'
         "</dl>")
     return f"""<!DOCTYPE html>
