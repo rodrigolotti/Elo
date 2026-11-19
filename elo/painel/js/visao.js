@@ -2,7 +2,7 @@
 
 import * as api from "./api.js";
 import { h } from "./dom.js";
-import { reais } from "./formatos.js";
+import { datasEmBrasilia, reais } from "./formatos.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
   "setembro", "outubro", "novembro", "dezembro"];
@@ -18,7 +18,8 @@ function motivoPrincipal(item) {
   }
   if (v.some((x) => x.includes(PISO_NAO_CONFERIDO))) return ["atencao", "Piso da ANTT não conferido"];
   if (v.some((x) => x.includes("acima do limite"))) return ["atencao", "Acima do limite do mandato"];
-  const texto = v[0] ?? "Aguardando decisão";
+  if (v.some((x) => x.startsWith("mandato revogado"))) return ["atencao", "Mandato revogado"];
+  const texto = datasEmBrasilia(v[0] ?? "Aguardando decisão");
   return ["atencao", texto.charAt(0).toUpperCase() + texto.slice(1)];
 }
 
@@ -58,7 +59,8 @@ export async function telaVisaoGeral() {
       h("span", { class: "vg-total" }, reais(e.total_centavos))));
 
   return h("section", { class: "visao-geral" },
-    h("div", { class: "vg-mes" }, `${MESES[Number(mes) - 1]} de ${ano}`),
+    h("div", { class: "vg-mes" },
+      `${api.sessao()?.razaoSocial ?? ""} · ${MESES[Number(mes) - 1]} de ${ano}`),
     h("h1", { tabindex: -1 }, "Visão geral"),
     h("div", { class: "vg-numeros" },
       numero("Fretes fechados no mês", reais(fechados.total_centavos),

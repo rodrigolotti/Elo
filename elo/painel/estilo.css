@@ -1,75 +1,95 @@
-/* Painel da transportadora. Mesma base visual da página pública /verificar. */
+/* Painel da transportadora. Identidade do Elo (direção A): fundo branco, uma cor de
+   marca (azul-marinho), muito espaço, tipografia forte e cor só para status
+   (verde ok, âmbar atenção, vermelho risco). */
+
+/* Inter (SIL Open Font License 1.1, ver fontes/OFL.txt), guardada no projeto:
+   sem CDN, então a CSP continua só com 'self'. */
+@font-face {
+  font-family: "Inter";
+  src: url("/painel/fontes/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
-  --fundo: #f6f7f9;
+  --marca: #0b2545;
+  --fundo: #ffffff;
   --superficie: #ffffff;
-  --texto: #1d2330;
-  --suave: #5b6475;
+  --texto: #0b1220;
+  --suave: #5b6576;
   --apagado: #8a93a3;
-  --borda: #e2e5eb;
+  --borda: #e3e6eb;
   --linha: #eceef2;
-  --cabeca-tabela: #f0f2f5;
-  --primaria: #1f4fbf;
-  --primaria-escura: #183f99;
-  --foco: #9db7f0;
-  --bom-fundo: #e3f4e8; --bom-texto: #14532d; --bom-borda: #9fd5b0;
-  --ruim-fundo: #fbe4e4; --ruim-texto: #7f1d1d; --ruim-borda: #eba9a9; --ruim: #b91c1c;
-  --alerta-fundo: #fff6e0; --alerta-texto: #6b4a00; --alerta-borda: #f0d48a;
-  --raio: 10px;
-  --sombra: 0 1px 2px rgba(0, 0, 0, .06);
+  --cabeca-tabela: #f6f7f9;
+  --primaria: var(--marca);
+  --primaria-escura: #071a33;
+  --foco: #8ea6c9;
+  --bom-fundo: #f0fdf4; --bom-texto: #14532d; --bom-borda: #bbf7d0;
+  --ruim-fundo: #fef2f2; --ruim-texto: #7f1d1d; --ruim-borda: #fecaca; --ruim: #b91c1c;
+  --alerta-fundo: #fffbeb; --alerta-texto: #78350f; --alerta-borda: #fde68a;
+  --raio: 12px;
+  --sombra: none;
   --mono: ui-monospace, Consolas, "SF Mono", monospace;
 }
 
 * { box-sizing: border-box; }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  margin: 0; background: var(--fundo); color: var(--texto); line-height: 1.45;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* números de largura fixa: valores em reais alinhados em listas e tabelas */
+  font-variant-numeric: tabular-nums;
+  margin: 0; background: var(--fundo); color: var(--texto); line-height: 1.5;
   min-height: 100vh; display: flex; flex-direction: column;
 }
 
-a { color: var(--primaria); }
-h1 { font-size: 1.45rem; margin: 0 0 4px; }
+a { color: var(--marca); }
+h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; color: var(--marca); margin: 0 0 6px; }
 h1:focus { outline: none; }
 h2 { font-size: 1.1rem; margin: 0 0 6px; }
 h3 { font-size: .9rem; margin: 0 0 6px; }
 .mono { font-family: var(--mono); font-size: .88em; color: var(--suave); word-break: break-all; }
 .ajuda { color: var(--suave); font-size: .87rem; margin: 4px 0 0; }
 
-/* ---------- topo ---------- */
+/* ---------- topo: claro, menu numa linha só ---------- */
 
 #topo { background: var(--superficie); border-bottom: 1px solid var(--borda); }
 .topo-dentro {
-  max-width: 1120px; margin: 0 auto; padding: 0 20px; min-height: 60px;
-  display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
+  max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 64px;
+  display: flex; align-items: center; gap: 24px;
 }
-.marca { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--texto); }
-.marca-elo { font-weight: 800; font-size: 1.25rem; letter-spacing: -.02em; }
+.marca { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--marca); flex: none; }
+.marca img { display: block; }
+.marca-elo { font-weight: 800; font-size: 1.3rem; letter-spacing: -.03em; }
 .marca-sub { color: var(--suave); font-size: .9rem; }
-nav { display: flex; gap: 4px; flex: 1; }
+nav { display: flex; gap: 2px; flex: 1; min-width: 0; white-space: nowrap; overflow-x: auto;
+  scrollbar-width: none; align-self: stretch; }
+nav::-webkit-scrollbar { display: none; }
 nav a {
-  color: var(--suave); text-decoration: none; padding: 19px 12px 17px; font-weight: 500;
-  border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px;
+  color: var(--suave); text-decoration: none; padding: 0 12px; font-weight: 500; font-size: .95rem;
+  border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 nav a:hover { color: var(--texto); }
-nav a.ativo { color: var(--texto); border-bottom-color: var(--primaria); }
+nav a.ativo { color: var(--marca); font-weight: 700; border-bottom-color: var(--marca); }
 .contador {
-  background: var(--ruim); color: #fff; border-radius: 999px; font-size: .75rem;
-  font-weight: 700; padding: 1px 7px;
+  background: var(--marca); color: #fff; border-radius: 999px; font-size: .72rem;
+  font-weight: 700; padding: 1px 7px; line-height: 1.4;
 }
-.quem { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-.quem-nome { font-weight: 600; }
-.quem-cnpj { font-size: .8rem; }
+.quem { display: flex; align-items: center; gap: 12px; flex: none; }
+.quem-nome { font-weight: 600; font-size: .9rem; max-width: 190px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.quem-cnpj { display: none; }
 
 /* ---------- conteúdo ---------- */
 
-main { max-width: 1120px; width: 100%; margin: 0 auto; padding: 32px 20px 48px; flex: 1; }
-.cabecalho { margin-bottom: 24px; }
+main { max-width: 1200px; width: 100%; margin: 0 auto; padding: 44px 32px 64px; flex: 1; }
+.cabecalho { margin-bottom: 28px; }
 .subtitulo { color: var(--suave); margin: 0; max-width: 70ch; }
 .carregando { color: var(--suave); }
 
 .duas-colunas { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 24px; align-items: start; }
-@media (max-width: 860px) { .duas-colunas { grid-template-columns: 1fr; } }
+@media (max-width: 860px) { .duas-colunas { grid-template-columns: minmax(0, 1fr); } }
+.duas-colunas > *, .lista-cartoes > * { min-width: 0; }
 
 .lista-cartoes { display: grid; gap: 16px; }
 .cartao {
@@ -79,7 +99,7 @@ main { max-width: 1120px; width: 100%; margin: 0 auto; padding: 32px 20px 48px; 
 .cartao-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .cartao-org { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 
-.dados { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; }
+.dados { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; margin: 0; }
 .dados dt { color: var(--suave); font-size: .88rem; }
 .dados dd { margin: 0; }
 
@@ -261,4 +281,40 @@ a.vg-linha:hover .vg-rota, a.vg-linha:focus-visible .vg-rota { text-decoration: 
   .vg-status { text-align: left; }
   .vg-embarcadores { grid-template-columns: 1fr auto; }
   .vg-embarcadores .vg-total { grid-column: 1 / -1; }
+}
+
+/* ---------- identidade: detalhes de componentes ---------- */
+
+.cartao { border-radius: var(--raio); border-color: var(--borda); }
+.cartao-topo h2 { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; color: var(--marca); }
+.cartao-topo h2.c-valor { font-size: 2rem; margin: 0; }
+.c-rota { font-size: 1.05rem; font-weight: 700; color: var(--texto); margin: 2px 0 4px; }
+.botao { border-radius: 10px; }
+.subtitulo { font-size: 1rem; }
+th { font-weight: 600; }
+
+/* ---------- celular (até 640 px) ---------- */
+
+@media (max-width: 640px) {
+  .topo-dentro { height: auto; flex-wrap: wrap; padding: 10px 16px 0; gap: 4px 12px; }
+  .marca { order: 1; }
+  .quem { order: 2; margin-left: auto; }
+  .quem-nome { max-width: 150px; }
+  nav { order: 3; flex: 1 0 100%; height: 44px; margin: 0 -4px; }
+  nav a { padding: 0 10px; }
+  main { padding: 24px 16px 40px; }
+  #avisos { padding: 12px 16px 0; }
+  h1 { font-size: 1.6rem; }
+  .cartao { padding: 16px; }
+  .cartao-topo { flex-wrap: wrap; }
+  .cartao-org { flex-direction: column; align-items: stretch; }
+  .dados { grid-template-columns: 1fr; gap: 0; }
+  .dados dt { margin-top: 10px; }
+  .acoes { flex-direction: column-reverse; align-items: stretch; }
+  .acoes .botao { width: 100%; text-align: center; }
+  table { display: block; overflow-x: auto; }
+  /* códigos não quebram letra a letra: a tabela rola por dentro, a página não */
+  td .mono { word-break: normal; white-space: nowrap; }
+  .links { flex-direction: column; gap: 10px; }
+  .rodape { padding: 16px; }
 }

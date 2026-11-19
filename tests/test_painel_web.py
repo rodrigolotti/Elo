@@ -241,3 +241,48 @@ def test_datas_iso_dentro_de_um_texto_viram_horario_de_brasilia(navegador):
     texto = "mandato revogado em 2026-11-18T22:54:43+00:00; ok"
     assert chamar(navegador, "formatos.js", "datasEmBrasilia", texto) \
         == "mandato revogado em 18/11/2026 às 19:54 (horário de Brasília); ok"
+
+
+# ---------- identidade visual: fonte, logotipo, contraste ----------
+
+def test_fonte_inter_guardada_no_projeto_e_servida_pela_csp(cliente):
+    css = (PASTA_PAINEL / "estilo.css").read_text(encoding="utf-8")
+    assert 'url("/painel/fontes/InterVariable.woff2")' in css
+    assert "font-variant-numeric: tabular-nums" in css
+    assert not re.search(r"url\(\s*[\"']?https?:", css), "CSS não pode buscar nada fora do projeto"
+    r = cliente.get("/painel/fontes/InterVariable.woff2")
+    assert r.status_code == 200 and r.headers["content-type"] == "font/woff2"
+    assert "SIL Open Font License" in (PASTA_PAINEL / "fontes" / "OFL.txt").read_text(encoding="utf-8")
+    assert "font-src 'self'" in cliente.get("/painel/").headers["content-security-policy"]
+
+
+def test_logotipo_servido_como_svg(cliente):
+    r = cliente.get("/painel/logo.svg")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg+xml")
+    assert "<script" not in r.text
+
+
+def _variaveis_css():
+    css = (PASTA_PAINEL / "estilo.css").read_text(encoding="utf-8")
+    return dict(re.findall(r"--([a-z-]+):\s*(#[0-9a-fA-F]{6})", css))
+
+
+def _contraste(cor1, cor2):
+    def luminancia(cor):
+        canais = [int(cor[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in canais]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    claro, escuro = sorted((luminancia(cor1), luminancia(cor2)), reverse=True)
+    return (claro + 0.05) / (escuro + 0.05)
+
+
+@pytest.mark.parametrize("texto, fundo", [
+    ("texto", "fundo"), ("suave", "fundo"), ("marca", "fundo"), ("fundo", "marca"),
+    ("status-ok", "fundo"), ("status-atencao", "fundo"), ("status-risco", "fundo"),
+    ("bom-texto", "bom-fundo"), ("ruim-texto", "ruim-fundo"), ("alerta-texto", "alerta-fundo"),
+    ("ruim", "ruim-fundo"), ("suave", "cabeca-tabela"),
+])
+def test_contraste_aa_da_wcag(texto, fundo):
+    cores = _variaveis_css()
+    razao = _contraste(cores[texto], cores[fundo])
+    assert razao >= 4.5, f"{texto} sobre {fundo}: {razao:.2f}:1 (mínimo AA 4,5:1)"

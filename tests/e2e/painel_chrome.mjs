@@ -208,6 +208,9 @@ class Pagina {
     const lixo = await this.avaliar(`document.body.innerText.split("\\n")
       .map((l) => l.trim()).filter((l) => ["null", "undefined", "NaN", "[object Object]"].includes(l))`);
     if (lixo.length) falhar(`texto indevido na tela: ${JSON.stringify(lixo)}`);
+    const iso = await this.avaliar(String.raw`(document.querySelector("main")?.innerText ?? "")
+      .match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/g)`);
+    if (iso) falhar(`data ISO crua na tela: ${JSON.stringify(iso)}`);
   }
 
   // nenhum aviso pode ficar em cima de um botão ou link de ação
@@ -327,6 +330,44 @@ async function emitirMandatoPelaTela(p, captura) {
   await p.clicar("Emitir mandato");
   await p.aguardarTexto("emitido: até R$ 6.000,00 por frete.");
   await p.aguardar("[...document.querySelectorAll('.etiqueta.bom')].some((e) => e.textContent === 'Ativo')");
+}
+
+// passa por todas as telas logadas numa largura, conferindo layout e fotografando
+const TELAS = ["/visao-geral", "/aprovacoes", "/agentes", "/mandatos", "/historico", "/seguranca"];
+
+async function percorrerTelas(p, largura, altura, prefixo) {
+  await p.cdp("Emulation.setDeviceMetricsOverride",
+    { width: largura, height: altura, deviceScaleFactor: 1, mobile: largura < 500 });
+  for (const rota of TELAS) {
+    await p.avaliar(`location.hash = '#${rota}'`);
+    await p.aguardar(`location.hash === '#${rota}' && document.querySelector('main h1') `
+      + "&& !document.querySelector('main .carregando')");
+    await esperar(200);
+    const m = await p.avaliar(`({
+      largura: document.documentElement.scrollWidth, janela: window.innerWidth,
+      // qualquer elemento (fora de tabelas e do menu, que rolam por dentro) além da borda
+      vazando: [...document.querySelectorAll("main *, #topo *")]
+        .filter((e) => !e.closest("table, nav") && e.getBoundingClientRect().right > window.innerWidth + 1)
+        .slice(0, 3).map((e) => e.tagName + "." + e.className),
+      linhasDoMenu: new Set([...document.querySelectorAll("nav a")].map((a) => a.offsetTop)).size,
+      demo: [...document.querySelectorAll("button")].some((b) =>
+        b.textContent.trim() === "Simular pedido de cotação" && b.offsetParent !== null),
+      topo: document.querySelector("#topo").offsetHeight,
+      cortados: (() => {
+        const nav = document.querySelector("nav").getBoundingClientRect();
+        return [...document.querySelectorAll("nav a")]
+          .filter((a) => a.getBoundingClientRect().right > nav.right + 1).map((a) => a.textContent);
+      })() })`);
+    if (m.largura > m.janela || m.vazando.length) {
+      falhar(`${rota} em ${largura} px passa da borda: ${m.largura} px; ${JSON.stringify(m.vazando)}`);
+    }
+    if (m.linhasDoMenu !== 1) falhar(`${rota} em ${largura} px: menu em ${m.linhasDoMenu} linhas`);
+    if (largura < 500 && m.demo) falhar("o botão de demonstração aparece no celular");
+    if (largura >= 1000 && (!m.demo || m.topo > 66 || m.cortados.length)) {
+      falhar(`topo no desktop: ${JSON.stringify(m)}`);
+    }
+    await p.capturar(`${prefixo}-${rota.slice(1)}`);
+  }
 }
 
 const tokenDa = (p) => p.avaliar(`JSON.parse(sessionStorage.getItem("elo.sessao")).token`);
@@ -546,8 +587,15 @@ async function roteiro() {
   for (const trecho of ["Comercial Exemplo de Alimentos Ltda (fictícia)",
     "Primeiro frete com este embarcador", "Carga geral · 3.200 kg · 14,5 m³",
     "Peso cubado: 4.350 kg (300 kg/m³), maior que o peso real", "vence em 23 h",
-    "R$ 9.000,00 · SP (01000-000) → PR (80000-000)"]) {
+    "SP (01000-000) → PR (80000-000)"]) {
     await p.aguardarTexto(trecho);
+  }
+  const hierarquia = await p.avaliar(`(() => {
+    const c = document.querySelector("article.cartao");
+    return { valor: c.querySelector(".c-valor").textContent, rota: c.querySelector(".c-rota").textContent };
+  })()`);
+  if (!/^R\$ \d/.test(hierarquia.valor) || !hierarquia.rota.includes("→")) {
+    falhar(`cartão sem valor em destaque e rota abaixo: ${JSON.stringify(hierarquia)}`);
   }
   if (await p.avaliar("document.querySelector('main').innerText.includes('14500 L')")) {
     falhar("o volume ainda aparece em litros");
@@ -804,6 +852,12 @@ async function roteiro() {
   await p2.aguardar(`document.querySelectorAll('article.cartao').length === ${cartoesAntes + 2}`, 20000);
   if (await p2.avaliar("document.querySelector('dialog').open")) falhar("pediu para preparar de novo");
   ok("demonstração: prepara uma vez (assinando no navegador) e simula 3 ofertas por pedido");
+  await percorrerTelas(p2, 1280, 900, "desktop");
+  ok("desktop (1280 px): topo numa linha, menu numa linha, botão de demonstração, sem rolagem lateral");
+  await percorrerTelas(p2, 390, 844, "celular");
+  await p2.cdp("Emulation.setDeviceMetricsOverride",
+    { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  ok("celular (390 px): todas as telas sem rolagem lateral, menu numa linha, sem botão de demonstração");
 
   console.log("13. Conferências finais");
   const corpos = [...p.corpos, ...p2.corpos];

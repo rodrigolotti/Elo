@@ -134,7 +134,8 @@ function desenharTopo(caminho, pendentes, semRecuperacao) {
   const emPasso = passoObrigatorio !== null;
   limpar(topo).append(h("div", { class: "topo-dentro" },
     h("a", { class: "marca", href: atual ? "#/visao-geral" : "#/entrar" },
-      h("span", { class: "marca-elo" }, "Elo"),
+      h("img", { src: "/painel/logo.svg", alt: "", width: 30, height: 20 }),
+      h("span", { class: "marca-elo" }, "elo"),
       atual && !emPasso ? null : h("span", { class: "marca-sub" },
         emPasso ? "Cadastro: passo 2 de 2" : "Painel da transportadora")),
     atual && !emPasso ? h("nav", { "aria-label": "Seções" },
@@ -151,8 +152,6 @@ function desenharTopo(caminho, pendentes, semRecuperacao) {
       onclick: (e) => simularPedido(e.currentTarget),
     }, "Simular pedido de cotação") : null,
     atual && !emPasso ? h("div", { class: "quem" },
-      h("span", { class: "quem-nome" }, atual.razaoSocial),
-      h("span", { class: "quem-cnpj mono" }, atual.cnpj),
       h("button", { type: "button", class: "botao secundario pequeno", onclick: async () => {
         await api.sair().catch(() => {});
         location.hash = "#/entrar";
@@ -572,7 +571,8 @@ function cartaoOferta(item, agentes) {
   const agente = agentes.get(oferta.emissor.agente_id);
   return h("article", { class: "cartao" },
     h("div", { class: "cartao-topo" },
-      h("div", {}, h("h2", {}, `${reais(c.valor_centavos)} · ${rota(oferta.carga)}`),
+      h("div", {}, h("h2", { class: "c-valor" }, reais(c.valor_centavos)),
+        h("div", { class: "c-rota" }, rota(oferta.carga)),
         h("div", { class: "ajuda" }, nomeEmbarcador, " · ", mono(oferta.id))),
       h("span", { class: `etiqueta ${vencida ? "ruim" : "neutro"}`,
                   title: `Válida até ${emBrasilia(oferta.valida_ate)}` },

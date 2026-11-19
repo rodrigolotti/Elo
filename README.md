@@ -74,7 +74,7 @@ Os testes do JavaScript do painel usam Node 20 ou mais novo; sem Node, eles são
 python3 -m venv .venv && . .venv/bin/activate
 pip install pydantic cryptography pytest fastapi uvicorn httpx2 tzdata
 python3 demo.py          # cenário de ponta a ponta, com tentativa de fraude no final
-python3 -m pytest -q     # 382 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
+python3 -m pytest -q     # 402 testes (os de JavaScript precisam de Node; o de comparação ao vivo com o esse-frete-paga só roda com ESSE_FRETE_PAGA)
 ```
 
 ## API no Windows (cmd)
@@ -178,8 +178,18 @@ garantir isso.
 Com a API no ar, abra http://127.0.0.1:8000/painel/. É HTML, CSS e JavaScript
 servidos pelo próprio FastAPI, sem framework e sem etapa de build.
 
+**Identidade visual.** Fundo branco, uma cor de marca (azul-marinho `#0b2545`) e cor só
+para status: verde para ok, âmbar para atenção, vermelho para risco. Os pares de cor do
+texto passam no contraste AA da WCAG (4,5:1), conferido por teste. A fonte é a
+[Inter](https://github.com/rsms/inter) (SIL Open Font License 1.1), guardada em
+`elo/painel/fontes/` com a licença. Não há CDN, então a CSP só ganhou `font-src 'self'`.
+Os valores usam números de largura fixa (`tabular-nums`). No celular, o topo fica em
+duas linhas, o menu rola para o lado numa linha só e nenhuma tela passa da borda. O
+roteiro do Chrome confere isso em 390 px.
+
 | Tela | O que faz |
 | --- | --- |
+| Visão geral | Tela inicial: fretes fechados no mês, ofertas esperando decisão, fretes barrados abaixo do piso e fretes por embarcador |
 | Entrar | Escolhe a organização guardada no navegador e entra assinando o desafio |
 | Cadastro | Gera a chave da organização no navegador e cadastra o CNPJ |
 | Agentes | Cria o certificado do agente a partir da chave pública dele |

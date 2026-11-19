@@ -143,6 +143,8 @@ PASTA_PAINEL = Path(__file__).parent / "painel"
 # No Windows o registro pode associar .js a text/plain, e o navegador recusa
 # módulos JavaScript servidos assim.
 mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 # O painel usa a chave da organização: um script estranho na página conseguiria
 # usá-la (não copiá-la). Por isso só roda script servido daqui, sem inline.
@@ -152,6 +154,7 @@ CABECALHOS_PAINEL = {
         "script-src 'self'",
         "style-src 'self'",
         "img-src 'self' data:",
+        "font-src 'self'",  # Inter, guardada no projeto (sem CDN)
         "connect-src 'self'",
         "base-uri 'none'",
         "form-action 'self'",
