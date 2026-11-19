@@ -335,6 +335,25 @@ async function emitirMandatoPelaTela(p, captura) {
 // passa por todas as telas logadas numa largura, conferindo layout e fotografando
 const TELAS = ["/visao-geral", "/aprovacoes", "/agentes", "/mandatos", "/historico", "/seguranca"];
 
+// motivos visíveis de cada linha de "Aguardando sua decisão", na ordem da tela
+const MOTIVOS_NA_TELA = `[...document.querySelectorAll("a.vg-linha")].map((l) => ({
+  valor: l.querySelector(".vg-valor").textContent,
+  motivos: [...l.querySelectorAll(".vg-status")]
+    .filter((m) => m.getClientRects().length && getComputedStyle(m).visibility !== "hidden")
+    .map((m) => [m.textContent, m.classList.contains("risco") ? "risco" : "atencao"].join(":")),
+}))`;
+const PISO_E_REVOGADO = "R$ 3.071,76 abaixo do piso da ANTT:risco|Mandato revogado:atencao";
+
+// a oferta de R$ 1.000 abaixo do piso e com o mandato revogado mostra os dois motivos
+async function conferirPisoERevogado(p, onde) {
+  const linhas = await p.avaliar(MOTIVOS_NA_TELA);
+  const r1000 = linhas.filter((l) => l.valor === "R$ 1.000,00");
+  if (r1000.length !== 1 || r1000[0].motivos.join("|") !== PISO_E_REVOGADO) {
+    falhar(`${onde}: oferta de R$ 1.000 deveria mostrar "abaixo do piso" (vermelho) e depois `
+           + `"Mandato revogado": ${JSON.stringify(linhas)}`);
+  }
+}
+
 async function percorrerTelas(p, largura, altura, prefixo) {
   await p.cdp("Emulation.setDeviceMetricsOverride",
     { width: largura, height: altura, deviceScaleFactor: 1, mobile: largura < 500 });
@@ -384,6 +403,7 @@ async function percorrerTelas(p, largura, altura, prefixo) {
         return s.indexOf(false) !== -1 && s.lastIndexOf(true) > s.indexOf(false);
       }).length`);
       if (fora) falhar(`Visão geral: ${fora} oferta(s) com motivo grave depois de um mais leve`);
+      await conferirPisoERevogado(p, `Visão geral em ${largura} px`);
       // nenhum texto cortado com reticências (nome do embarcador, rota)
       const cortado = await p.avaliar(`[...document.querySelectorAll(".visao-geral .vg-linha *")]
         .filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === "ellipsis")
@@ -806,8 +826,10 @@ async function roteiro() {
       || linhaPendente.embarcador !== "Comercial Exemplo de Alimentos Ltda (fictícia)") {
     falhar(`linha aguardando: ${JSON.stringify(linhaPendente)}`);
   }
+  await conferirPisoERevogado(p, "Visão geral");
   await p.capturar("visao-geral");
   ok("Visão geral: fechados no mês, aguardando, barrados abaixo do piso e por embarcador");
+  ok("Visão geral: R$ 1.000 abaixo do piso e com mandato revogado mostra os dois motivos, o piso primeiro");
   await p.menu("/aprovacoes");
   await p.aguardar("document.querySelectorAll('article.cartao').length === 1");
   await p.aguardarTexto("2 fretes já fechados com ele");
@@ -919,11 +941,15 @@ async function roteiro() {
   ok("chave nova não exportável no outro computador; histórico: recuperação definida e "
      + "rotação, ambas OK");
 
-  const fora = await emitirOferta(agente, pedido.id, agenteId, mandato2Id, 100_000);
-  if (fora.status !== "aguardando_aprovacao" || !fora.violacoes.some((v) => v.includes("revogado"))) {
+  // lotação de 500 km por R$ 1.000: abaixo do piso E com o mandato revogado, para as
+  // capturas da Visão geral (desktop e celular) mostrarem uma oferta com os dois motivos
+  const fora = await emitirOferta(agente, pedido.id, agenteId, mandato2Id, 100_000, LOTACAO_500KM);
+  if (fora.status !== "aguardando_aprovacao" || fora.violacoes.length !== 2
+      || !fora.violacoes[0].startsWith("abaixo do piso mínimo da ANTT")
+      || !fora.violacoes[1].startsWith("mandato revogado")) {
     falhar(`oferta com mandato revogado na recuperação: ${JSON.stringify(fora.violacoes)}`);
   }
-  ok("oferta nova com o mandato revogado na recuperação sai do mandato (vai para aprovação)");
+  ok("oferta nova com o mandato revogado na recuperação (e abaixo do piso) vai para aprovação");
   for (const cp of cps) {
     const rel = await http("GET", `/compromissos/${cp.id}/verificacao`);
     if (!rel.valido || rel.verificacoes.length !== 15) falhar(`compromisso ${cp.id} inválido`);

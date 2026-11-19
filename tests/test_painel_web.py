@@ -311,6 +311,27 @@ def test_motivos_do_mais_grave_ao_menos_grave(navegador):
     ]
 
 
+def test_oferta_abaixo_do_piso_com_mandato_revogado_mostra_os_dois_motivos(navegador):
+    """R$ 1.000 em lotação de 500 km (piso R$ 4.071,76) com o mandato revogado:
+    as frases vêm do próprio servidor (elo.mandato.violacoes), e a Visão geral
+    mostra as duas, o piso primeiro, mesmo com "revogado" antes na lista."""
+    from elo.mandato import violacoes
+    from elo.modelos import Carga, Condicoes
+    from test_api import CARGA, LIMITES
+
+    momento = datetime(2026, 11, 17, 12, tzinfo=timezone.utc)
+    cond = Condicoes(valor_centavos=100_000, coleta_ate="2026-11-20", prazo_entrega_dias_uteis=2,
+                     modalidade="lotacao", distancia_km=500, eixos=5)
+    problemas = violacoes(LimitesMandato(**LIMITES), Carga(**CARGA), cond, momento,
+                          revogado_em="2026-11-17T08:00:00-03:00")
+    assert len(problemas) == 2
+    frete = {"piso": {"estimado": False, "folga_centavos": 100_000 - 407_176}}
+    esperado = [{"status": "risco", "texto": "R$ 3.071,76 abaixo do piso da ANTT"},
+                {"status": "atencao", "texto": "Mandato revogado"}]
+    for ordem in (problemas, problemas[::-1]):
+        assert chamar(navegador, "motivos.js", "motivosOrdenados", ordem, frete) == esperado
+
+
 def test_motivo_sem_rotulo_curto_vira_frase_sem_data_crua(navegador):
     r = chamar(navegador, "motivos.js", "motivosOrdenados",
                ["origem RJ fora das UFs autorizadas", "mandato venceu em 2026-11-01T00:00:00-03:00"],
